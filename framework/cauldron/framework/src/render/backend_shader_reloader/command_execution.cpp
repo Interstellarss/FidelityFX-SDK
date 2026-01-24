@@ -36,7 +36,12 @@ void backend_shader_reloader::ExecuteSystemCommand(const std::string& cmd)
 
     char        buffer[128];
     std::string result = "";
-    FILE*       pipe   = _popen(cmd.c_str(), "r");
+    FILE*       pipe   =
+#if defined(_WIN)
+        _popen(cmd.c_str(), "r");
+#else
+        popen(cmd.c_str(), "r");
+#endif
     if (!pipe)
         throw std::runtime_error(" error: popen() failed!");
     try
@@ -48,11 +53,20 @@ void backend_shader_reloader::ExecuteSystemCommand(const std::string& cmd)
     }
     catch (...)
     {
+        #if defined(_WIN)
         _pclose(pipe);
+        #else
+        pclose(pipe);
+        #endif
         throw std::runtime_error(result);
     }
 
-    int retValue = _pclose(pipe);
+    int retValue =
+#if defined(_WIN)
+        _pclose(pipe);
+#else
+        pclose(pipe);
+#endif
     if (retValue != 0)
     {
         std::string errorMsg = " command failed: " + std::string(cmd);

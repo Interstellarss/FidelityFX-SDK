@@ -26,6 +26,9 @@
 #include "render/resourceview.h"
 #include "shaders/shadercommon.h"
 
+#define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING
+#include <experimental/filesystem>
+
 namespace cauldron
 {
     class SwapChainRenderTarget;

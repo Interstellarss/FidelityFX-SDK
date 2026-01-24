@@ -139,15 +139,20 @@ void GBufferRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
     // Do clears
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    ClearRenderTarget(pCmdList, &m_RasterViews[0]->GetResourceView(), clearColor);
-    ClearRenderTarget(pCmdList, &m_RasterViews[1]->GetResourceView(), clearColor);
-    ClearRenderTarget(pCmdList, &m_RasterViews[2]->GetResourceView(), clearColor);
+    ResourceViewInfo rtv0 = m_RasterViews[0]->GetResourceView();
+    ResourceViewInfo rtv1 = m_RasterViews[1]->GetResourceView();
+    ResourceViewInfo rtv2 = m_RasterViews[2]->GetResourceView();
+    ClearRenderTarget(pCmdList, &rtv0, clearColor);
+    ClearRenderTarget(pCmdList, &rtv1, clearColor);
+    ClearRenderTarget(pCmdList, &rtv2, clearColor);
     if (m_GenerateMotionVectors)
     {
-        ClearRenderTarget(pCmdList, &m_RasterViews[3]->GetResourceView(), clearColor);
+        ResourceViewInfo rtv3 = m_RasterViews[3]->GetResourceView();
+        ClearRenderTarget(pCmdList, &rtv3, clearColor);
     }
 
-    ClearDepthStencil(pCmdList, &m_RasterViews[4]->GetResourceView(), 0);
+    ResourceViewInfo dsv = m_RasterViews[4]->GetResourceView();
+    ClearDepthStencil(pCmdList, &dsv, 0);
 
     // Bind raster resources
     BeginRaster(pCmdList, m_GenerateMotionVectors ? 4 : 3, m_RasterViews.data(), m_RasterViews[4], m_VariableShading ? GetDevice()->GetVRSInfo() : nullptr);
@@ -238,7 +243,7 @@ void GBufferRenderModule::Execute(double deltaTime, CommandList* pCmdList)
                     GetDynamicBufferPool()->InitializeConstantBuffer(perObjectBufferInfo, sizeof(InstanceInformation), &instanceInfo);
 
                     BufferAddressInfo& textureIndicesBufferInfo = textureIndicesBufferInfos[currentSurface];
-                    GetDynamicBufferPool()->InitializeConstantBuffer(textureIndicesBufferInfo, sizeof(TextureIndices), &pipelineSurfaceInfo.TextureIndices);
+                    GetDynamicBufferPool()->InitializeConstantBuffer(textureIndicesBufferInfo, sizeof(TextureIndices), &pipelineSurfaceInfo.textureIndices);
 
                     currentSurface++;
 
@@ -340,26 +345,26 @@ void GBufferRenderModule::OnNewContentLoaded(ContentBlock* pContentBlock)
                     int32_t samplerIndex;
                     if (pMaterial->HasPBRInfo())
                     {
-                        surfaceRenderInfo.TextureIndices.AlbedoTextureIndex = AddTexture(pMaterial, TextureClass::Albedo, samplerIndex);
-                        surfaceRenderInfo.TextureIndices.AlbedoSamplerIndex = samplerIndex;
+                        surfaceRenderInfo.textureIndices.AlbedoTextureIndex = AddTexture(pMaterial, TextureClass::Albedo, samplerIndex);
+                        surfaceRenderInfo.textureIndices.AlbedoSamplerIndex = samplerIndex;
                         if (pMaterial->HasPBRMetalRough())
                         {
-                            surfaceRenderInfo.TextureIndices.MetalRoughSpecGlossTextureIndex = AddTexture(pMaterial, TextureClass::MetalRough, samplerIndex);
-                            surfaceRenderInfo.TextureIndices.MetalRoughSpecGlossSamplerIndex = samplerIndex;
+                            surfaceRenderInfo.textureIndices.MetalRoughSpecGlossTextureIndex = AddTexture(pMaterial, TextureClass::MetalRough, samplerIndex);
+                            surfaceRenderInfo.textureIndices.MetalRoughSpecGlossSamplerIndex = samplerIndex;
                         }
                         else if (pMaterial->HasPBRSpecGloss())
                         {
-                            surfaceRenderInfo.TextureIndices.MetalRoughSpecGlossTextureIndex = AddTexture(pMaterial, TextureClass::SpecGloss, samplerIndex);
-                            surfaceRenderInfo.TextureIndices.MetalRoughSpecGlossSamplerIndex = samplerIndex;
+                            surfaceRenderInfo.textureIndices.MetalRoughSpecGlossTextureIndex = AddTexture(pMaterial, TextureClass::SpecGloss, samplerIndex);
+                            surfaceRenderInfo.textureIndices.MetalRoughSpecGlossSamplerIndex = samplerIndex;
                         }
                     }
 
-                    surfaceRenderInfo.TextureIndices.NormalTextureIndex = AddTexture(pMaterial, TextureClass::Normal, samplerIndex);
-                    surfaceRenderInfo.TextureIndices.NormalSamplerIndex = samplerIndex;
-                    surfaceRenderInfo.TextureIndices.EmissiveTextureIndex = AddTexture(pMaterial, TextureClass::Emissive, samplerIndex);
-                    surfaceRenderInfo.TextureIndices.EmissiveSamplerIndex = samplerIndex;
-                    surfaceRenderInfo.TextureIndices.OcclusionTextureIndex = AddTexture(pMaterial, TextureClass::Occlusion, samplerIndex);
-                    surfaceRenderInfo.TextureIndices.OcclusionSamplerIndex = samplerIndex;
+                    surfaceRenderInfo.textureIndices.NormalTextureIndex = AddTexture(pMaterial, TextureClass::Normal, samplerIndex);
+                    surfaceRenderInfo.textureIndices.NormalSamplerIndex = samplerIndex;
+                    surfaceRenderInfo.textureIndices.EmissiveTextureIndex = AddTexture(pMaterial, TextureClass::Emissive, samplerIndex);
+                    surfaceRenderInfo.textureIndices.EmissiveSamplerIndex = samplerIndex;
+                    surfaceRenderInfo.textureIndices.OcclusionTextureIndex = AddTexture(pMaterial, TextureClass::Occlusion, samplerIndex);
+                    surfaceRenderInfo.textureIndices.OcclusionSamplerIndex = samplerIndex;
 
                     // Assign to the correct pipeline render group (will create a new pipeline group if needed)
                     m_PipelineRenderGroups[GetPipelinePermutationID(pSurface)].m_RenderSurfaces.push_back(surfaceRenderInfo);
@@ -404,7 +409,7 @@ void GBufferRenderModule::OnContentUnloaded(ContentBlock* pContentBlock)
                     for (auto& pipelineGroup : m_PipelineRenderGroups)
                     {
                         bool surfaceFound = false;
-                        for (auto& surfaceItr = pipelineGroup.m_RenderSurfaces.begin(); surfaceItr != pipelineGroup.m_RenderSurfaces.end(); ++surfaceItr)
+                        for (auto surfaceItr = pipelineGroup.m_RenderSurfaces.begin(); surfaceItr != pipelineGroup.m_RenderSurfaces.end(); ++surfaceItr)
                         {
                             if (surfaceItr->pOwner == pOwner && surfaceItr->pSurface == pSurface)
                             {
@@ -412,11 +417,11 @@ void GBufferRenderModule::OnContentUnloaded(ContentBlock* pContentBlock)
                                 surfaceFound = true;
 
                                 // Remove the texture entries
-                                RemoveTexture(surfaceItr->TextureIndices.AlbedoTextureIndex);
-                                RemoveTexture(surfaceItr->TextureIndices.MetalRoughSpecGlossTextureIndex);
-                                RemoveTexture(surfaceItr->TextureIndices.NormalTextureIndex);
-                                RemoveTexture(surfaceItr->TextureIndices.EmissiveTextureIndex);
-                                RemoveTexture(surfaceItr->TextureIndices.OcclusionTextureIndex);
+                                RemoveTexture(surfaceItr->textureIndices.AlbedoTextureIndex);
+                                RemoveTexture(surfaceItr->textureIndices.MetalRoughSpecGlossTextureIndex);
+                                RemoveTexture(surfaceItr->textureIndices.NormalTextureIndex);
+                                RemoveTexture(surfaceItr->textureIndices.EmissiveTextureIndex);
+                                RemoveTexture(surfaceItr->textureIndices.OcclusionTextureIndex);
 
                                 // Remove it from the list
                                 pipelineGroup.m_RenderSurfaces.erase(surfaceItr);
@@ -615,7 +620,9 @@ int32_t GBufferRenderModule::AddTexture(const Material* pMaterial, const Texture
         }
 
         // Texture wasn't found
-        BoundTexture b = { pTextureInfo->pTexture, 1 };
+        BoundTexture b;
+        b.pTexture = pTextureInfo->pTexture;
+        b.count = 1;
         if (firstFreeIndex < 0)
         {
             m_Textures.push_back(b);

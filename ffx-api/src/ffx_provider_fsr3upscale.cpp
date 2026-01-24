@@ -66,11 +66,22 @@ bool ffxProvider_FSR3Upscale::CanProvide(uint64_t type) const
 #define STRINGIFY(X) STRINGIFY_(X) 
 #define MAKE_VERSION_STRING(major, minor, patch) STRINGIFY major "." STRINGIFY minor "." STRINGIFY patch
 
+#ifdef _WIN32
 uint64_t ffxProvider_FSR3Upscale::GetId() const
 {
     // FSR Scale, version from header
     return 0xF5A5'CA1Eui64 << 32 | (FFX_SDK_MAKE_VERSION(FFX_FSR3UPSCALER_VERSION_MAJOR, FFX_FSR3UPSCALER_VERSION_MINOR, FFX_FSR3UPSCALER_VERSION_PATCH) & 0xFFFF'FFFF);
 }
+#else
+uint64_t ffxProvider_FSR3Upscale::GetId() const
+{
+    uint64_t base = 0xF5A5CA1EULL;
+    uint64_t ver  = FFX_SDK_MAKE_VERSION(FFX_FSR3UPSCALER_VERSION_MAJOR,
+                                        FFX_FSR3UPSCALER_VERSION_MINOR,
+                                        FFX_FSR3UPSCALER_VERSION_PATCH) & 0xFFFFFFFFULL;
+    return (base << 32) | ver;
+}
+#endif
 
 const char* ffxProvider_FSR3Upscale::GetVersionName() const
 {

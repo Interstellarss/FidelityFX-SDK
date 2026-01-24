@@ -108,7 +108,11 @@ namespace cauldron
             if (InsertTimeStamp(pCmdList))
             {
                 std::vector<GPUTimingInfo>& infos = m_GPUTimingInfos[m_CurrentFrame];
-                infos.push_back({ label, m_TimeStampCount - 1, 0 });
+                GPUTimingInfo timingInfo;
+                timingInfo.Label = label;
+                timingInfo.StartIndex = m_TimeStampCount - 1;
+                timingInfo.EndIndex = 0;
+                infos.push_back(timingInfo);
                 capture.GPUIndex = static_cast<uint32_t>(infos.size()) - 1;
             }
         }

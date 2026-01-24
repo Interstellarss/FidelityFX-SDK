@@ -64,7 +64,11 @@ void GPUParticleRenderModule::Init(const json& initData)
     signatureDesc.AddConstantBufferView(0, ShaderBindStage::Compute, 1);  // b0 - per frame
     signatureDesc.AddConstantBufferView(1, ShaderBindStage::Compute, 1);  // b1 - per emitter
 
-    SamplerDesc samplerDesc = {FilterFunc::MinMagMipPoint, AddressMode::Wrap, AddressMode::Wrap, AddressMode::Clamp};
+    SamplerDesc samplerDesc;
+    samplerDesc.Filter = FilterFunc::MinMagMipPoint;
+    samplerDesc.AddressU = AddressMode::Wrap;
+    samplerDesc.AddressV = AddressMode::Wrap;
+    samplerDesc.AddressW = AddressMode::Clamp;
 
     signatureDesc.AddStaticSamplers(0, ShaderBindStage::Compute, 1, &samplerDesc);
 
@@ -77,7 +81,7 @@ void GPUParticleRenderModule::Init(const json& initData)
         psoDesc.SetRootSignature(m_pRootSignature);
 
         // Setup the shaders to build on the pipeline object
-        std::wstring shaderPath = L"ParticleSimulation.hlsl";
+        std::wstring shaderPath = L"particlesimulation.hlsl";
         psoDesc.AddShaderDesc(ShaderBuildDesc::Compute(shaderPath.c_str(), L"CS_Reset", ShaderModel::SM6_0, &defineList));
 
         m_pResetParticlesPipelineObj = PipelineObject::CreatePipelineObject(L"ResetParticles_PipelineObj", psoDesc);
@@ -89,7 +93,7 @@ void GPUParticleRenderModule::Init(const json& initData)
         psoDesc.SetRootSignature(m_pRootSignature);
 
         // Setup the shaders to build on the pipeline object
-        std::wstring shaderPath = L"ParticleSimulation.hlsl";
+        std::wstring shaderPath = L"particlesimulation.hlsl";
         psoDesc.AddShaderDesc(ShaderBuildDesc::Compute(shaderPath.c_str(), L"CS_ClearAliveCount", ShaderModel::SM6_0, &defineList));
 
         m_pClearAliveCountPipelineObj = PipelineObject::CreatePipelineObject(L"ClearAliveCount_PipelineObj", psoDesc);
@@ -101,7 +105,7 @@ void GPUParticleRenderModule::Init(const json& initData)
         psoDesc.SetRootSignature(m_pRootSignature);
 
         // Setup the shaders to build on the pipeline object
-        std::wstring shaderPath = L"ParticleSimulation.hlsl";
+        std::wstring shaderPath = L"particlesimulation.hlsl";
         psoDesc.AddShaderDesc(ShaderBuildDesc::Compute(shaderPath.c_str(), L"CS_Simulate", ShaderModel::SM6_0, &defineList));
 
         m_pSimulatePipelineObj = PipelineObject::CreatePipelineObject(L"Simulation_PipelineObj", psoDesc);
@@ -113,7 +117,7 @@ void GPUParticleRenderModule::Init(const json& initData)
         psoDesc.SetRootSignature(m_pRootSignature);
 
         // Setup the shaders to build on the pipeline object
-        std::wstring shaderPath = L"ParticleEmit.hlsl";
+        std::wstring shaderPath = L"particleemit.hlsl";
         psoDesc.AddShaderDesc(ShaderBuildDesc::Compute(shaderPath.c_str(), L"CS_Emit", ShaderModel::SM6_0, &defineList));
 
         m_pEmitPipelineObj = PipelineObject::CreatePipelineObject(L"Emit_PipelineObj", psoDesc);

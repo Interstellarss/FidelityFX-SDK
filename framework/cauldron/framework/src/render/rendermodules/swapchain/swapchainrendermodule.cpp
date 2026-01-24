@@ -30,12 +30,57 @@
 #include "render/swapchain.h"
 #include "render/texture.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+
 namespace cauldron
 {
+    namespace
+    {
+        bool IsEnabledValue(const char* value)
+        {
+            if (!value)
+                return false;
+            if (std::strcmp(value, "1") == 0)
+                return true;
+            std::string lower(value);
+            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            return (lower == "true" || lower == "yes" || lower == "on");
+        }
+
+        bool ContainsCaseInsensitive(const char* value, const char* token)
+        {
+            if (!value || !token)
+                return false;
+            std::string lower(value);
+            std::string tokenLower(token);
+            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            std::transform(tokenLower.begin(), tokenLower.end(), tokenLower.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            return lower.find(tokenLower) != std::string::npos;
+        }
+    }
+
     void SwapChainRenderModule::Init(const json& initData)
     {
         // Setup the texture to be the swapchain render target input
-        m_pTexture = GetFramework()->GetRenderTexture(L"SwapChainProxy");
+        m_pSwapChainProxyTexture = GetFramework()->GetRenderTexture(L"SwapChainProxy");
+        m_pHdrTexture = GetFramework()->GetRenderTexture(L"HDR11Color");
+        m_pTexture = m_pSwapChainProxyTexture;
+        if (m_pHdrTexture)
+            m_pHdrRasterView = GetRasterViewAllocator()->RequestRasterView(m_pHdrTexture, ViewDimension::Texture2D);
+        if (!m_pHdrTexture)
+            CauldronWarning(L"SwapChainRenderModule: HDR11Color texture not found.");
+        if (m_pHdrTexture && !m_pHdrRasterView)
+            CauldronWarning(L"SwapChainRenderModule: HDR11Color raster view unavailable.");
 
         // root signature
         RootSignatureDesc signatureDesc;
@@ -94,7 +139,59 @@ namespace cauldron
         Barrier barrier = Barrier::Transition(m_pRenderTarget->GetCurrentResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::RenderTargetResource);
         ResourceBarrier(pCmdList, 1, &barrier);
 
-        ClearRenderTarget(pCmdList, &GetFramework()->GetSwapChain()->GetBackBufferRTV(), m_pBackbufferClearColor);
+        ResourceViewInfo backBufferRtv = GetFramework()->GetSwapChain()->GetBackBufferRTV();
+        const char* debugClear = std::getenv("CAULDRON_DEBUG_SWAPCHAIN_CLEAR");
+        const char* debugHdrClear = std::getenv("CAULDRON_DEBUG_HDR11_CLEAR");
+        const char* debugSource = std::getenv("CAULDRON_DEBUG_SWAPCHAIN_SOURCE");
+        if (!m_DebugEnvLogged)
+        {
+            std::wstring clearValue = StringToWString(debugClear ? debugClear : "(null)");
+            std::wstring hdrValue = StringToWString(debugHdrClear ? debugHdrClear : "(null)");
+            std::wstring sourceValue = StringToWString(debugSource ? debugSource : "(null)");
+            CauldronWarning(L"SwapChainRenderModule: CAULDRON_DEBUG_SWAPCHAIN_CLEAR=%ls", clearValue.c_str());
+            CauldronWarning(L"SwapChainRenderModule: CAULDRON_DEBUG_HDR11_CLEAR=%ls", hdrValue.c_str());
+            CauldronWarning(L"SwapChainRenderModule: CAULDRON_DEBUG_SWAPCHAIN_SOURCE=%ls", sourceValue.c_str());
+            m_DebugEnvLogged = true;
+        }
+        if (debugClear && std::strcmp(debugClear, "1") == 0)
+        {
+            const float debugColor[4] = {0.1f, 0.6f, 0.1f, 1.0f};
+            ClearRenderTarget(pCmdList, &backBufferRtv, debugColor);
+            barrier = Barrier::Transition(m_pRenderTarget->GetCurrentResource(),
+                                          ResourceState::RenderTargetResource,
+                                          ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource);
+            ResourceBarrier(pCmdList, 1, &barrier);
+            return;
+        }
+
+        if (debugHdrClear && std::strcmp(debugHdrClear, "1") == 0 && m_pHdrTexture && m_pHdrRasterView)
+        {
+            const GPUResource* hdrResource = m_pHdrTexture->GetResource();
+            ResourceState hdrState = hdrResource->GetCurrentResourceState();
+            Barrier hdrBarrier = Barrier::Transition(hdrResource, hdrState, ResourceState::RenderTargetResource);
+            ResourceBarrier(pCmdList, 1, &hdrBarrier);
+            const float hdrDebugColor[4] = {1.0f, 0.0f, 1.0f, 1.0f};
+            ResourceViewInfo hdrRtv = m_pHdrRasterView->GetResourceView();
+            ClearRenderTarget(pCmdList, &hdrRtv, hdrDebugColor);
+            hdrBarrier = Barrier::Transition(hdrResource,
+                                             ResourceState::RenderTargetResource,
+                                             ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource);
+            ResourceBarrier(pCmdList, 1, &hdrBarrier);
+        }
+
+        const Texture* sourceTexture = m_pSwapChainProxyTexture;
+        if (debugSource && m_pHdrTexture)
+        {
+            if (ContainsCaseInsensitive(debugSource, "hdr") || IsEnabledValue(debugSource))
+                sourceTexture = m_pHdrTexture;
+        }
+        if (sourceTexture != m_pTexture)
+        {
+            m_pTexture = sourceTexture;
+            m_pParameters->SetTextureSRV(m_pTexture, ViewDimension::Texture2D, 0);
+        }
+
+        ClearRenderTarget(pCmdList, &backBufferRtv, m_pBackbufferClearColor);
 
         BeginRaster(pCmdList, 1, &m_pRasterView);
 

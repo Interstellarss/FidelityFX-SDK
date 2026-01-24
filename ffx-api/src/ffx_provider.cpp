@@ -30,7 +30,9 @@
 #include <array>
 #include <optional>
 
+#ifdef _WIN32
 #include <d3d12.h>
+#endif
 
 #ifdef FFX_BACKEND_DX12
 #include "dx12/ffx_provider_framegenerationswapchain_dx12.h"
@@ -51,10 +53,17 @@ static constexpr ffxProvider* providers[] = {
     &ffxProvider_FrameGenerationSwapChain_VK::Instance,
 #endif // FFX_BACKEND_VK
 };
+
+#ifdef _countof
 static constexpr size_t providerCount = _countof(providers);
+#else
+ static constexpr size_t providerCount =
+      sizeof(providers) / sizeof(providers[0]);
+#endif
 
 static std::array<std::optional<ffxProviderExternal>, 10> externalProviders = {};
 
+#ifdef _WIN32
 MIDL_INTERFACE("b58d6601-7401-4234-8180-6febfc0e484c")
 IAmdExtFfxApi : public IUnknown
 {
@@ -130,11 +139,31 @@ void GetExternalProviders(ID3D12Device* device, uint64_t descType)
     }
     
 }
+#else
+// On non-Windows, we don’t have a DX12 driver extension;
+  // define the struct and a no-op function.
+  struct ExternalProviderData
+  {
+      uint32_t structVersion = 0;
+      uint64_t descType;
+      ffxProviderInterface provider;
+  };
+  #define FFX_EXTERNAL_PROVIDER_STRUCT_VERSION 1u
+
+  inline void GetExternalProviders(void*, uint64_t) {}
+
+#endif // _WIN32
+
 
 const ffxProvider* GetffxProvider(ffxStructType_t descType, uint64_t overrideId, void* device)
 {
     // check driver-side providers
-    GetExternalProviders(reinterpret_cast<ID3D12Device*>(device), descType);
+    //GetExternalProviders(reinterpret_cast<ID3D12Device*>(device), descType);
+    #ifdef _WIN32
+      GetExternalProviders(reinterpret_cast<ID3D12Device*>(device), descType);
+    #else
+      GetExternalProviders(nullptr, descType);
+    #endif
 
     // If we are overriding, do not make the best provider choice decision
     if (overrideId)
@@ -217,7 +246,13 @@ uint64_t GetProviderVersions(ffxStructType_t descType, void* device, uint64_t ca
     uint64_t count = 0;
 
     // check driver-side providers
-    GetExternalProviders(reinterpret_cast<ID3D12Device*>(device), descType);
+    //GetExternalProviders(reinterpret_cast<ID3D12Device*>(device), descType);
+    #ifdef _WIN32
+        GetExternalProviders(reinterpret_cast<ID3D12Device*>(device), descType);
+    #else
+        GetExternalProviders(nullptr, descType);
+    #endif
+
 
     for (const auto& provider : externalProviders)
     {

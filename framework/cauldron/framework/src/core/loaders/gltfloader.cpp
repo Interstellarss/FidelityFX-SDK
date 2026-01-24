@@ -88,7 +88,7 @@ namespace cauldron
     constexpr int g_GLTFComponentType_UnsignedInt   = 5125;
     constexpr int g_GLTFComponentType_Float         = 5126;
 
-    constexpr char* g_LightExtensionName = "KHR_lights_punctual";
+    constexpr const char* g_LightExtensionName = "KHR_lights_punctual";
 
     float ReadFloat(const json& object, const char* name, float defaultValue)
     {
@@ -309,16 +309,22 @@ namespace cauldron
     void GLTFLoader::LoadGLTFContent(void* pParam)
     {
         filesystem::path* pFileToLoad = reinterpret_cast<filesystem::path*>(pParam);
+        std::wstring filePathW = StringToWString(pFileToLoad->string());
 
         bool fileExists = filesystem::exists(*pFileToLoad);
-        CauldronAssert(ASSERT_ERROR, fileExists, L"Could not load GLTF file %ls", pFileToLoad->c_str());
+        CauldronAssert(ASSERT_ERROR, fileExists, L"Could not load GLTF file %ls", filePathW.c_str());
 
         if (fileExists)
         {
             // Grab the path without the filename for resource loading
             filesystem::path filePath = pFileToLoad->parent_path();
-            std::wstring filePathString = filePath.c_str();
-            filePathString.append(L"\\");
+            std::wstring filePathString = StringToWString(filePath.string());
+            if (!filePathString.empty())
+            {
+                wchar_t separator = static_cast<wchar_t>(filesystem::path::preferred_separator);
+                if (filePathString.back() != L'/' && filePathString.back() != L'\\')
+                    filePathString.push_back(separator);
+            }
 
             // Create glTF data representation that will be passed around for loading
             GLTFDataRep* glTFDataRep = new GLTFDataRep();
@@ -330,11 +336,11 @@ namespace cauldron
 
             // Add the name of the file all content was loaded from (will be used to uniquely identify internal assets like meshes and animations)
             glTFDataRep->GLTFFilePath = filePathString;
-            glTFDataRep->GLTFFileName = pFileToLoad->c_str();
+            glTFDataRep->GLTFFileName = filePathW;
 
             // Start by loading the glTF file and reading in all the json data
             glTFDataRep->pGLTFJsonData = new json();
-            CauldronAssert(ASSERT_CRITICAL, ParseJsonFile(pFileToLoad->c_str(), *glTFDataRep->pGLTFJsonData), L"Could not parse JSON file %ls", pFileToLoad->c_str());
+            CauldronAssert(ASSERT_CRITICAL, ParseJsonFile(filePathW.c_str(), *glTFDataRep->pGLTFJsonData), L"Could not parse JSON file %ls", filePathW.c_str());
 
             // Grab the handle to the GLTF data
             const json& glTFData = *glTFDataRep->pGLTFJsonData;
@@ -828,7 +834,7 @@ namespace cauldron
             int attributeID = attributes[attributeName];
             auto& accessor = accessors[attributeID];
 
-            std::string& type = accessor["type"].get<std::string>();
+            std::string type = accessor["type"].get<std::string>();
             uint32_t resourceFormatDimension = ResourceFormatDimension(type);
 
             int32_t resourceFormatType = accessor["componentType"];
@@ -937,7 +943,7 @@ namespace cauldron
 
             info.Count = accessor["count"].get<uint32_t>();
 
-            std::string& type = accessor["type"].get<std::string>();
+            std::string type = accessor["type"].get<std::string>();
             CauldronAssert(ASSERT_ERROR, type == "SCALAR", L"Indices types are only scalar");
 
             // create buffer
@@ -1136,8 +1142,14 @@ namespace cauldron
             {
                 auto& maxAccessor = (*pPosAccessor)["max"];
                 auto& minAccessor = (*pPosAccessor)["min"];
-                Vec4 max = Vec4(maxAccessor[0], maxAccessor[1], maxAccessor[2], maxAccessor.size() == 4 ? maxAccessor[3] : 0);
-                Vec4 min = Vec4(minAccessor[0], minAccessor[1], minAccessor[2], minAccessor.size() == 4 ? minAccessor[3] : 0);
+                Vec4 max = Vec4(maxAccessor[0].get<float>(),
+                                maxAccessor[1].get<float>(),
+                                maxAccessor[2].get<float>(),
+                                maxAccessor.size() == 4 ? maxAccessor[3].get<float>() : 0.0f);
+                Vec4 min = Vec4(minAccessor[0].get<float>(),
+                                minAccessor[1].get<float>(),
+                                minAccessor[2].get<float>(),
+                                minAccessor.size() == 4 ? minAccessor[3].get<float>() : 0.0f);
 
                 pSurface->Center() = (min + max) * 0.5f;
                 pSurface->Radius() = max - pMeshResource->GetSurface(i)->Center();

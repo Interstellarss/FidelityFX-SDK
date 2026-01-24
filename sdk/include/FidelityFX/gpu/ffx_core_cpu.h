@@ -20,6 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#if defined(__cplusplus)
+#include <cmath>
+#define FFX_STD_SQRT std::sqrt
+#define FFX_STD_FLOOR std::floor
+#else
+#include <math.h>
+#define FFX_STD_SQRT sqrt
+#define FFX_STD_FLOOR floor
+#endif
+
 /// A define for a true value in a boolean expression.
 ///
 /// @ingroup CPUTypes
@@ -124,7 +134,7 @@ FFX_STATIC FfxFloat32 ffxReciprocal(FfxFloat32 x)
 /// @ingroup CPUCore
 FFX_STATIC FfxFloat32 ffxSqrt(FfxFloat32 x)
 {
-    return FfxFloat32(sqrt(x));
+    return FfxFloat32(FFX_STD_SQRT(x));
 }
 
 FFX_STATIC FfxUInt32 ffxAShrSU1(FfxUInt32 a, FfxUInt32 b)
@@ -144,7 +154,7 @@ FFX_STATIC FfxUInt32 ffxAShrSU1(FfxUInt32 a, FfxUInt32 b)
 /// @ingroup CPUCore
 FFX_STATIC FfxFloat32 ffxFract(FfxFloat32 x)
 {
-    return x - FfxFloat32(floor(x));
+    return x - FfxFloat32(FFX_STD_FLOOR(x));
 }
 
 /// Compute the reciprocal square root of a value.

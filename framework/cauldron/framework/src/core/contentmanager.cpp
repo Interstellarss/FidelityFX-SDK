@@ -37,6 +37,9 @@ namespace cauldron
 {
     ContentManager::ContentManager()
     {
+        m_ActiveContentLoads.store(0);
+        m_ActiveTextureLoads.store(0);
+
         // Init our content loaders
         m_ContentLoaders.resize(static_cast<uint32_t>(LoaderType::Count));
         m_ContentLoaders[static_cast<uint32_t>(LoaderType::GLTF)]       = new GLTFLoader();

@@ -38,13 +38,13 @@ float4 CopyTextureToSwapChainPS(VertexOut VertexIn) : SV_Target
 	// Needed now?
     /*switch (swapchainCBData.displayMode)
     {
-        case DisplayMode::DISPLAYMODE_LDR:
-        case DisplayMode::DISPLAYMODE_HDR10_SCRGB:
-        case DisplayMode::DISPLAYMODE_FSHDR_SCRGB:
+        case DISPLAYMODE_LDR:
+        case DISPLAYMODE_HDR10_SCRGB:
+        case DISPLAYMODE_FSHDR_SCRGB:
             break;
 
-        case DisplayMode::DISPLAYMODE_HDR10_2084:
-        case DisplayMode::DISPLAYMODE_FSHDR_2084:
+        case DISPLAYMODE_HDR10_2084:
+        case DISPLAYMODE_FSHDR_2084:
             // Apply ST2084 curve
             color.xyz = ApplyPQ(color.xyz);
             break;

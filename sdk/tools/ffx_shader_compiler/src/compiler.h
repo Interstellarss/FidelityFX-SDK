@@ -22,8 +22,19 @@
 
 #pragma once
 
+#ifdef _WIN32
 #include "pch.hpp"
+#endif
 #include <optional>
+#include <cstdint>      // For uint8_t, uint32_t
+#include <string>       // For std::string, std::wstring
+#include <vector>       // For std::vector
+#include <memory>       // For std::shared_ptr
+#include <unordered_set> // For std::unordered_set
+#include <mutex>        // For std::mutex
+#include <cstdio>       // For FILE
+#include <filesystem>   // For fs::path
+namespace fs = std::filesystem;
 
 /// @defgroup ShaderCompiler Shader Compiler
 /// Documentation for the FidelityFX Shader Compiler tool
@@ -119,7 +130,11 @@ struct Permutation
     std::string                         hashDigest;                 ///< Shader permutation hash key.
     std::string                         name;                       ///< Shader permutation name.
     std::string                         headerFileName;             ///< Shader permutation header file name.
+#ifdef _WIN32
     std::vector<std::wstring>           defines;                    ///< Shader permutation defines.
+#else
+    std::vector<std::string>            defines;                    ///< Shader permutation defines.
+#endif
     std::shared_ptr<IShaderBinary>      shaderBinary = nullptr;     ///< Shader permutation compiled binary data.
     std::shared_ptr<IReflectionData>    reflectionData = nullptr;   ///< Shader permutation <c><i>IReflectionData</i></c> data.
 

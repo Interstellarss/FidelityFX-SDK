@@ -20,7 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include "core/win/framework_win.h" // Framework
+#if defined(_WIN)
+    #include "core/win/framework_win.h" // Framework
+#elif defined(__linux__)
+    #include "core/linux/framework_linux.h"
+#else
+    #error No Main defined for Platform!
+#endif
 
 // If using a custom sample, pull in its header
 #if defined(SampleInclude)
@@ -69,6 +75,29 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     FrameworkType frameworkInstance(&initParams);
     return RunFramework(&frameworkInstance);
 }
-#else
-    #error No Main defined for Platform!
+#elif defined(__linux__)
+static FrameworkInitParamsInternal s_LinuxParams;
+static std::wstring s_CmdLineStorage;
+int main(int argc, char** argv)
+{
+    FrameworkInitParams initParams = {};
+    initParams.Name = SampleName;
+
+    s_LinuxParams.Argc = argc;
+    s_LinuxParams.Argv = argv;
+
+    std::string cmdLine;
+    for (int i = 1; i < argc; ++i)
+    {
+        if (i > 1)
+            cmdLine += " ";
+        cmdLine += argv[i];
+    }
+    s_CmdLineStorage = StringToWString(cmdLine);
+    initParams.CmdLine = const_cast<wchar_t*>(s_CmdLineStorage.c_str());
+    initParams.AdditionalParams = &s_LinuxParams;
+
+    FrameworkType frameworkInstance(&initParams);
+    return RunFramework(&frameworkInstance);
+}
 #endif // _WIN

@@ -186,7 +186,9 @@ void MagnifierCS(uint3 dtID : SV_DispatchThreadID)
         lerp(blendedMagnifierCirclesWithLines, blendedMagnifierColorFinal,
              smoothstep(centerToCenterPlusAlphaLength, centerToCenterPlusAlphaLength + BORDER_THICKNESS_OFFSET, distanceOnCenterline));
     
-    ColorTargetDst[dtID.xy].rgb = blendedMagnifierCirclesWithLines;
+    float4 dstColor = ColorTargetDst[dtID.xy];
+    dstColor.rgb = blendedMagnifierCirclesWithLines;
+    ColorTargetDst[dtID.xy] = dstColor;
 }
 
 //--------------------------------------------------------------------------------------
@@ -206,17 +208,17 @@ float4 uiPS(PS_INPUT input) : SV_Target
 
     switch (HDRCB.MonitorDisplayMode)
     {
-        case DisplayMode::DISPLAYMODE_LDR:
+        case DISPLAYMODE_LDR:
             out_col.xyz = ApplyGamma(out_col.xyz);
             break;
 
-        case DisplayMode::DISPLAYMODE_HDR10_SCRGB:
-        case DisplayMode::DISPLAYMODE_FSHDR_SCRGB:
+        case DISPLAYMODE_HDR10_SCRGB:
+        case DISPLAYMODE_FSHDR_SCRGB:
             out_col.xyz = ApplyscRGBScale(out_col.xyz, 0.0f, HDRCB.DisplayMaxLuminance / 80.0f);
             break;
 
-        case DisplayMode::DISPLAYMODE_HDR10_2084:
-        case DisplayMode::DISPLAYMODE_FSHDR_2084:
+        case DISPLAYMODE_HDR10_2084:
+        case DISPLAYMODE_FSHDR_2084:
             // Convert to rec2020 colour space
             float3 col = mul(HDRCB.ContentToMonitorRecMatrix, out_col).xyz;
 

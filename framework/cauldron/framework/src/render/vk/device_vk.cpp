@@ -22,7 +22,11 @@
 
 #if defined(_VK)
 
-#include "core/win/framework_win.h" // VK builds imply _WIN is defined
+#if defined(_WIN)
+#include "core/win/framework_win.h"
+#else
+#include "core/linux/framework_linux.h"
+#endif
 #include "misc/assert.h"
 
 #include "render/vk/buffer_vk.h"
@@ -34,18 +38,22 @@
 #include "render/vk/texture_vk.h"
 #include "render/vk/uploadheap_vk.h"
 
+#if defined(_WIN)
 #include <vulkan/vulkan_win32.h>
+#else
+#include <GLFW/glfw3.h>
+#endif
 #include <map>
 
 // macro to get the procedure address of vulkan extensions
 #define GET_INSTANCE_PROC_ADDR(name) m_##name = (PFN_##name)vkGetInstanceProcAddr(m_Instance, #name)
 #define GET_DEVICE_PROC_ADDR(name) m_##name = (PFN_##name)vkGetDeviceProcAddr(m_Device, #name)
-#define SET_FEATURE_IF_SUPPORTED(name) physicalDeviceFeatures.##name = supportedPhysicalDeviceFeatures.##name;\
-                                       CauldronAssert(ASSERT_WARNING, physicalDeviceFeatures.##name == VK_TRUE, L"" #name " physical device feature requested but not supported");
+#define SET_FEATURE_IF_SUPPORTED(name) physicalDeviceFeatures.name = supportedPhysicalDeviceFeatures.name;\
+                                       CauldronAssert(ASSERT_WARNING, physicalDeviceFeatures.name == VK_TRUE, L"" #name " physical device feature requested but not supported");
 
-#define CHECK_FEATURE_SUPPORT(name) CauldronAssert(ASSERT_WARNING, physicalDeviceFeatures.##name == VK_TRUE, L"" #name " physical device feature requested but not supported");
-#define CHECK_FEATURE_SUPPORT_11(name) CauldronAssert(ASSERT_WARNING, vulkan11Features.##name == VK_TRUE, L"" #name " physical device feature for Vulkan 1.1 requested but not supported");
-#define CHECK_FEATURE_SUPPORT_12(name) CauldronAssert(ASSERT_WARNING, vulkan12Features.##name == VK_TRUE, L"" #name " physical device feature for Vulkan 1.2 requested but not supported");
+#define CHECK_FEATURE_SUPPORT(name) CauldronAssert(ASSERT_WARNING, physicalDeviceFeatures.name == VK_TRUE, L"" #name " physical device feature requested but not supported");
+#define CHECK_FEATURE_SUPPORT_11(name) CauldronAssert(ASSERT_WARNING, vulkan11Features.name == VK_TRUE, L"" #name " physical device feature for Vulkan 1.1 requested but not supported");
+#define CHECK_FEATURE_SUPPORT_12(name) CauldronAssert(ASSERT_WARNING, vulkan12Features.name == VK_TRUE, L"" #name " physical device feature for Vulkan 1.2 requested but not supported");
 
 #define HAS_QUEUE_FAMILY_FLAG(flag) ((queueProps[i].queueFlags & flag) == flag)
 
@@ -634,8 +642,22 @@ namespace cauldron
         app_info.apiVersion         = VK_API_VERSION_1_2;
 
         // add default extensions
+#if defined(_WIN)
         instanceCreator.TryAddExtension(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
         instanceCreator.TryAddExtension(VK_KHR_SURFACE_EXTENSION_NAME);
+#else
+        uint32_t glfwExtensionCount = 0;
+        const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+        if (!glfwExtensions || glfwExtensionCount == 0)
+        {
+            CauldronCritical(L"GLFW did not provide Vulkan instance extensions.");
+        }
+        else
+        {
+            for (uint32_t i = 0; i < glfwExtensionCount; ++i)
+                instanceCreator.TryAddExtension(glfwExtensions[i]);
+        }
+#endif
         instanceCreator.TryAddExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         instanceCreator.TryAddExtension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
         instanceCreator.TryAddExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
@@ -699,19 +721,26 @@ namespace cauldron
         // get the best available gpu
         m_PhysicalDevice = SelectPhysicalDevice(physicalDevices, app_info.apiVersion);
 
-        // Create a Win32 Surface
+        // Create the window surface
+#if defined(_WIN)
         VkWin32SurfaceCreateInfoKHR createInfo = {};
         createInfo.sType                       = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
         createInfo.pNext                       = nullptr;
         createInfo.hwnd                        = GetFramework()->GetImpl()->GetHWND();
         res                                    = vkCreateWin32SurfaceKHR(m_Instance, &createInfo, nullptr, &m_Surface);
+#else
+        GLFWwindow* window = GetFramework()->GetImpl()->GetGLFWwindow();
+        res = glfwCreateWindowSurface(m_Instance, window, nullptr, &m_Surface);
+#endif
 
         // Use device creator to collect the extensions
         DeviceCreator deviceCreator(m_PhysicalDevice);
 
         // Add necessary extensions
         deviceCreator.TryAddExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+        #if defined(VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME)
         deviceCreator.TryAddExtension(VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME);
+        #endif
         deviceCreator.TryAddExtension(VK_EXT_HDR_METADATA_EXTENSION_NAME);
         deviceCreator.TryAddExtension(VK_AMD_DISPLAY_NATIVE_HDR_EXTENSION_NAME);
         deviceCreator.TryAddExtension(VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME);
@@ -720,8 +749,10 @@ namespace cauldron
         // general features
         VkPhysicalDeviceVulkan11Features vulkan11Features = {};
         VkPhysicalDeviceVulkan12Features vulkan12Features = {};
+        VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures = {};
         deviceCreator.AppendNextFeature(&vulkan11Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
         deviceCreator.AppendNextFeature(&vulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
+        deviceCreator.AppendNextFeature(&descriptorIndexingFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES);
 
         // for SM 6.1
         VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR fragmentShaderBarycentricFeatures = {};
@@ -821,6 +852,24 @@ namespace cauldron
         // query all features
         VkPhysicalDeviceFeatures physicalDeviceFeatures = deviceCreator.QueryDeviceFeatures();
 
+        // Ensure descriptor indexing features are enabled when supported in Vulkan 1.2.
+        // Some drivers expect VkPhysicalDeviceDescriptorIndexingFeatures to be explicitly set.
+        auto EnableIfSupported = [](VkBool32& feature, VkBool32 supported) {
+            if (supported == VK_TRUE)
+                feature = VK_TRUE;
+        };
+        EnableIfSupported(descriptorIndexingFeatures.descriptorBindingPartiallyBound, vulkan12Features.descriptorBindingPartiallyBound);
+        EnableIfSupported(descriptorIndexingFeatures.runtimeDescriptorArray, vulkan12Features.runtimeDescriptorArray);
+        EnableIfSupported(descriptorIndexingFeatures.descriptorBindingVariableDescriptorCount, vulkan12Features.descriptorBindingVariableDescriptorCount);
+        EnableIfSupported(descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind, vulkan12Features.descriptorBindingSampledImageUpdateAfterBind);
+        EnableIfSupported(descriptorIndexingFeatures.descriptorBindingStorageBufferUpdateAfterBind, vulkan12Features.descriptorBindingStorageBufferUpdateAfterBind);
+        EnableIfSupported(descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind, vulkan12Features.descriptorBindingStorageImageUpdateAfterBind);
+        EnableIfSupported(descriptorIndexingFeatures.descriptorBindingUniformBufferUpdateAfterBind, vulkan12Features.descriptorBindingUniformBufferUpdateAfterBind);
+        EnableIfSupported(descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing, vulkan12Features.shaderSampledImageArrayNonUniformIndexing);
+        EnableIfSupported(descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing, vulkan12Features.shaderStorageBufferArrayNonUniformIndexing);
+        EnableIfSupported(descriptorIndexingFeatures.shaderStorageImageArrayNonUniformIndexing, vulkan12Features.shaderStorageImageArrayNonUniformIndexing);
+        EnableIfSupported(descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing, vulkan12Features.shaderUniformBufferArrayNonUniformIndexing);
+
         // query properties
         VkPhysicalDeviceVulkan11Properties               vulkan11Properties            = {};
         VkPhysicalDeviceVulkan12Properties               vulkan12Properties            = {};
@@ -831,6 +880,8 @@ namespace cauldron
         deviceCreator.AppendNextProperty(&driverProperties,   VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES);
         deviceCreator.AppendNextProperty(&subgroupProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES);
         VkPhysicalDeviceProperties physicalDeviceProperties = deviceCreator.QueryDeviceProperties();
+
+        // No-op for Vulkan 1.2 features: values already set by QueryDeviceFeatures().
 
         // list of the features to check
         struct ShaderModelCheckList
@@ -1025,6 +1076,7 @@ namespace cauldron
         deviceCreator.AppendNextFeature(&features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
         deviceCreator.AppendNextFeature(&vulkan11Features);
         deviceCreator.AppendNextFeature(&vulkan12Features);
+        deviceCreator.AppendNextFeature(&descriptorIndexingFeatures);
 
         CauldronAssert(ASSERT_WARNING,
                        extendedDynamicStateFeatures.extendedDynamicState == VK_TRUE,
@@ -1559,6 +1611,14 @@ namespace cauldron
         return m_QueueSyncPrims[static_cast<uint32_t>(queueType)].GetLatestSemaphoreValue();
     }
 
+    void DeviceInternal::EnsureFrameSemaphoreCount(uint32_t numFramesInFlight)
+    {
+        for (uint32_t i = 0; i < static_cast<uint32_t>(CommandQueue::Count); ++i)
+        {
+            m_QueueSyncPrims[i].EnsureFrameSemaphoreCount(m_Device, numFramesInFlight);
+        }
+    }
+
     void DeviceInternal::ExecuteResourceTransitionImmediate(uint32_t barrierCount, const Barrier* pBarriers)
     {
         // should be executed on the transition queue
@@ -1837,20 +1897,20 @@ namespace cauldron
         info.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         info.pNext                = nullptr;
         info.waitSemaphoreCount   = waitSemaphores.count;
-        info.pWaitSemaphores      = waitSemaphores.semaphores;
-        info.pWaitDstStageMask    = waitSemaphores.stages;
-        info.pCommandBuffers      = commandBuffers.data();
+        info.pWaitSemaphores      = waitSemaphores.count ? waitSemaphores.semaphores : nullptr;
+        info.pWaitDstStageMask    = waitSemaphores.count ? waitSemaphores.stages : nullptr;
         info.commandBufferCount   = static_cast<uint32_t>(commandBuffers.size());
+        info.pCommandBuffers      = info.commandBufferCount ? commandBuffers.data() : nullptr;
         info.signalSemaphoreCount = signalSemaphores.count;
-        info.pSignalSemaphores    = signalSemaphores.semaphores;
+        info.pSignalSemaphores    = signalSemaphores.count ? signalSemaphores.semaphores : nullptr;
 
         VkTimelineSemaphoreSubmitInfo semaphoreSubmitInfo = {};
         semaphoreSubmitInfo.sType                         = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
         semaphoreSubmitInfo.pNext                         = nullptr;
         semaphoreSubmitInfo.waitSemaphoreValueCount       = waitSemaphores.count;
-        semaphoreSubmitInfo.pWaitSemaphoreValues          = waitSemaphores.values;
+        semaphoreSubmitInfo.pWaitSemaphoreValues          = waitSemaphores.count ? waitSemaphores.values : nullptr;
         semaphoreSubmitInfo.signalSemaphoreValueCount     = signalSemaphores.count;
-        semaphoreSubmitInfo.pSignalSemaphoreValues        = signalSemaphores.values;
+        semaphoreSubmitInfo.pSignalSemaphoreValues        = signalSemaphores.count ? signalSemaphores.values : nullptr;
 
         info.pNext = &semaphoreSubmitInfo;
 
@@ -1908,6 +1968,28 @@ namespace cauldron
         uint64_t value = 0;
         vkGetSemaphoreCounterValue(device, m_Semaphore, &value);
         return value;
+    }
+
+    void DeviceInternal::QueueSyncPrimitive::EnsureFrameSemaphoreCount(VkDevice device, uint32_t numFramesInFlight)
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_SubmitMutex);
+
+        if (m_FrameSemaphores.size() >= numFramesInFlight)
+            return;
+
+        VkSemaphoreCreateInfo createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        createInfo.pNext = nullptr;
+        createInfo.flags = 0;
+
+        while (m_FrameSemaphores.size() < numFramesInFlight)
+        {
+            VkSemaphore semaphore = VK_NULL_HANDLE;
+            VkResult res = vkCreateSemaphore(device, &createInfo, nullptr, &semaphore);
+            CauldronAssert(ASSERT_CRITICAL, res == VK_SUCCESS && semaphore != VK_NULL_HANDLE, L"Failed to create queue semaphore!");
+            GetDevice()->GetImpl()->SetResourceName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)semaphore, "CauldronSemaphore");
+            m_FrameSemaphores.push_back(semaphore);
+        }
     }
 
     void DeviceInternal::QueueSyncPrimitive::Flush()

@@ -44,7 +44,11 @@ HMODULE backend_shader_reloader::LoadBackendDll(
     {
         // Move the debug symbols because if Visual Studio IDE loads them then when FreeLibrary is called it
         // doesn't unload the symbols, so then the rebuild fails because it can't write to the pdb file.
-        ExecuteSystemCommand("move " + pdbPath.u8string() + " " + movePdbPath.u8string());
+        auto pdbPathU8 = pdbPath.u8string();
+        auto movePdbPathU8 = movePdbPath.u8string();
+        std::string pdbPathStr(reinterpret_cast<const char*>(pdbPathU8.c_str()));
+        std::string movePdbPathStr(reinterpret_cast<const char*>(movePdbPathU8.c_str()));
+        ExecuteSystemCommand("move " + pdbPathStr + " " + movePdbPathStr);
     }
     catch (std::runtime_error e)
     {

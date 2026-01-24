@@ -34,10 +34,15 @@ endfunction()
 endif()
 
 # Reference libs used
-add_subdirectory(libs/agilitysdk)
-add_subdirectory(libs/acs)
-add_subdirectory(libs/ags)
-add_subdirectory(libs/dxc)
+if (WIN32)
+    add_subdirectory(libs/agilitysdk)
+    add_subdirectory(libs/ags)
+    add_subdirectory(libs/pix)
+    add_subdirectory(libs/acs)
+    add_subdirectory(libs/dxc)
+endif()
+# add_subdirectory(libs/acs) # Moved to WIN32
+# add_subdirectory(libs/dxc) # Moved to WIN32
 add_subdirectory(libs/dxheaders)
 add_subdirectory(libs/imgui)
 add_subdirectory(libs/json)
@@ -45,7 +50,13 @@ add_subdirectory(libs/memoryallocator)
 add_subdirectory(libs/renderdoc)
 add_subdirectory(libs/stb)
 add_subdirectory(libs/vectormath)
-add_subdirectory(libs/pix)
+
+if (UNIX AND NOT APPLE)
+    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../glfw glfw)
+endif()
 
 if(CAULDRON_VK)
 #Add sources

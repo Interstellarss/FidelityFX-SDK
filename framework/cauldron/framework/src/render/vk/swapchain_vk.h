@@ -97,6 +97,7 @@ namespace cauldron
         void CreateSwapChainRenderTargets() override;
 
         void CreateSwapChain(uint32_t width, uint32_t height);
+        void RebuildSyncObjects(uint32_t backBufferCount);
 
     private:
         // Internal members

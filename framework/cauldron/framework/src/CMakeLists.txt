@@ -24,9 +24,14 @@ project (Framework)
 
 file(GLOB imguifiles
      ${CMAKE_CURRENT_SOURCE_DIR}/../libs/imgui/*.h
-     ${CMAKE_CURRENT_SOURCE_DIR}/../libs/imgui/*.cpp
-	 ${CMAKE_CURRENT_SOURCE_DIR}/../libs/imgui/backends/*.h
-     ${CMAKE_CURRENT_SOURCE_DIR}/../libs/imgui/backends/*.cpp)
+     ${CMAKE_CURRENT_SOURCE_DIR}/../libs/imgui/*.cpp)
+
+if (WIN32)
+    file(GLOB imguifiles_backends
+         ${CMAKE_CURRENT_SOURCE_DIR}/../libs/imgui/backends/*.h
+         ${CMAKE_CURRENT_SOURCE_DIR}/../libs/imgui/backends/*.cpp)
+    list(APPEND imguifiles ${imguifiles_backends})
+endif()
 
 file(GLOB miscfiles
     ${CMAKE_CURRENT_SOURCE_DIR}/../inc/misc/*.h
@@ -73,6 +78,10 @@ file(GLOB corefiles_windows
     ${CMAKE_CURRENT_SOURCE_DIR}/core/win/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/core/win/*.cpp)
 
+file(GLOB corefiles_linux
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/linux/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/linux/*.cpp)
+
 file(GLOB renderfiles
     ${CMAKE_CURRENT_SOURCE_DIR}/../inc/render/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/render/*.h
@@ -89,6 +98,10 @@ file(GLOB renderfiles_vk
 file(GLOB renderfiles_win
     ${CMAKE_CURRENT_SOURCE_DIR}/render/win/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/render/win/*.cpp)
+
+file(GLOB renderfiles_linux
+    ${CMAKE_CURRENT_SOURCE_DIR}/render/linux/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/render/linux/*.cpp)
 
 file(GLOB rendermodules_swapchain
     ${CMAKE_CURRENT_SOURCE_DIR}/render/rendermodules/swapchain/*.h
@@ -156,14 +169,31 @@ copyCommand("${fidelityfx_parallelsort_shaderfiles}" ${SHADER_OUTPUT}/fidelityfx
 set(cauldronconfigfiles ${CMAKE_CURRENT_SOURCE_DIR}/../config/cauldronconfig.json)
 copyCommand("${cauldronconfigfiles}" ${CONFIG_OUTPUT})
 
+if (WIN32)
+    set(corefiles_platform ${corefiles_windows})
+    set(renderfiles_platform ${renderfiles_win})
+else()
+    set(corefiles_platform ${corefiles_linux})
+    set(renderfiles_platform ${renderfiles_linux})
+endif()
+
 add_library(Framework STATIC
     ${imguifiles} ${miscfiles} ${corefiles} ${cauldronconfigfiles} ${corefiles_components} ${corefiles_loaders}
-    ${corefiles_windows} ${renderfiles} ${renderfiles_win} ${rendermodules_swapchain} ${rendermodules_ui}
+    ${corefiles_platform} ${renderfiles} ${renderfiles_platform} ${rendermodules_swapchain} ${rendermodules_ui}
     ${rendermodules_skinning} ${rendermodules_raytracing} ${rendermodules_tonemapping} ${rendermodules_fpslimiter}
     ${rendermodules_runtimeshaderrecompiler} ${shaderfiles} ${fidelityfx_common_shaderfiles} ${fidelityfx_spd_shaderfiles}
     ${fidelityfx_parallelsort_shaderfiles}
     $<$<OR:$<CONFIG:DebugVK>,$<CONFIG:ReleaseVK>,$<CONFIG:RelWithDebInfoVK>>: ${miscfiles_vk} ${renderfiles_vk}>
     $<$<OR:$<CONFIG:DebugDX12>,$<CONFIG:ReleaseDX12>,$<CONFIG:RelWithDebInfoDX12>>: ${miscfiles_dx12} ${renderfiles_dx12}>)
+
+if (NOT WIN32)
+    if (CAULDRON_VK)
+        target_sources(Framework PRIVATE ${miscfiles_vk} ${renderfiles_vk})
+    endif()
+    if (CAULDRON_DX12)
+        target_sources(Framework PRIVATE ${miscfiles_dx12} ${renderfiles_dx12})
+    endif()
+endif()
 
 target_compile_definitions(Framework PRIVATE RenderModuleRoot="${RENDERMODULE_ROOT}")
 
@@ -185,16 +215,36 @@ set(corefiles_backend_vk
     ${CMAKE_CURRENT_SOURCE_DIR}/../inc/core/backend_implementations/backend_interface_vk.h
     ${CMAKE_CURRENT_SOURCE_DIR}/core/backend_implementations/backend_interface_vk.cpp)
 
-add_library(backend_interface_static
-    $<$<OR:$<CONFIG:DebugVK>,$<CONFIG:ReleaseVK>,$<CONFIG:RelWithDebInfoVK>>: ${corefiles_backend_vk}>
-    $<$<OR:$<CONFIG:DebugDX12>,$<CONFIG:ReleaseDX12>,$<CONFIG:RelWithDebInfoDX12>>: ${corefiles_backend_dx12}>)
+if (WIN32)
+	add_library(backend_interface_static
+		$<$<OR:$<CONFIG:DebugVK>,$<CONFIG:ReleaseVK>,$<CONFIG:RelWithDebInfoVK>>: ${corefiles_backend_vk}>
+		$<$<OR:$<CONFIG:DebugDX12>,$<CONFIG:ReleaseDX12>,$<CONFIG:RelWithDebInfoDX12>>: ${corefiles_backend_dx12}>)
+else()
+	if (CAULDRON_VK)
+		add_library(backend_interface_static ${corefiles_backend_vk})
+	elseif (CAULDRON_DX12)
+		add_library(backend_interface_static ${corefiles_backend_dx12})
+	else()
+		add_library(backend_interface_static ${corefiles_backend_vk})
+	endif()
+endif()
 
 target_include_directories(backend_interface_static PUBLIC ${FFX_HOST_BACKENDS_PATH} ${FFX_INCLUDE_PATH})
 target_compile_definitions(backend_interface_static PRIVATE SUPPORT_RUNTIME_SHADER_RECOMPILE=0)
 
-add_library(backend_interface_dynamic
-    $<$<OR:$<CONFIG:DebugVK>,$<CONFIG:ReleaseVK>,$<CONFIG:RelWithDebInfoVK>>: ${corefiles_backend_vk}>
-    $<$<OR:$<CONFIG:DebugDX12>,$<CONFIG:ReleaseDX12>,$<CONFIG:RelWithDebInfoDX12>>: ${corefiles_backend_dx12}>)
+if (WIN32)
+	add_library(backend_interface_dynamic
+		$<$<OR:$<CONFIG:DebugVK>,$<CONFIG:ReleaseVK>,$<CONFIG:RelWithDebInfoVK>>: ${corefiles_backend_vk}>
+		$<$<OR:$<CONFIG:DebugDX12>,$<CONFIG:ReleaseDX12>,$<CONFIG:RelWithDebInfoDX12>>: ${corefiles_backend_dx12}>)
+else()
+	if (CAULDRON_VK)
+		add_library(backend_interface_dynamic ${corefiles_backend_vk})
+	elseif (CAULDRON_DX12)
+		add_library(backend_interface_dynamic ${corefiles_backend_dx12})
+	else()
+		add_library(backend_interface_dynamic ${corefiles_backend_vk})
+	endif()
+endif()
 
 target_include_directories(backend_interface_dynamic PUBLIC ${FFX_HOST_BACKENDS_PATH} ${FFX_INCLUDE_PATH})
 target_compile_definitions(backend_interface_dynamic PRIVATE SUPPORT_RUNTIME_SHADER_RECOMPILE=1)
@@ -221,11 +271,22 @@ if(CAULDRON_VK)
 	add_dependencies(Framework memoryallocator_vk)
 endif()
 
-target_link_libraries (Framework stb imgui amd_acs dxc Xinput Shcore)
+target_link_libraries (Framework stb imgui)
 
-if(CAULDRON_DX12)
-	target_link_libraries (Framework DXGI amd_ags memoryallocator_dx12 D3D12 pixlib agilitysdk dxheaders)
+if (WIN32)
+    target_link_libraries (Framework amd_acs dxc Xinput Shcore)
+    if(CAULDRON_DX12)
+        target_link_libraries (Framework DXGI amd_ags memoryallocator_dx12 D3D12 pixlib agilitysdk dxheaders)
+    endif()
 endif()
+
+if (UNIX AND NOT APPLE)
+    target_link_libraries (Framework glfw)
+    target_link_libraries (Framework dxheaders)
+    target_link_libraries (Framework stdc++fs)
+    target_compile_definitions(Framework PRIVATE FFX_GCC=1)
+endif()
+
 if(CAULDRON_VK)
 	target_link_libraries (Framework "Vulkan::Vulkan" memoryallocator_vk)
 endif()
@@ -240,7 +301,11 @@ if(CAULDRON_VK)
 endif()
 source_group("Core\\Components"    				             FILES ${corefiles_components})
 source_group("Core\\Loaders"					             FILES ${corefiles_loaders})
-source_group("Core\\Win"            			             FILES ${corefiles_windows})
+if (WIN32)
+    source_group("Core\\Win"            			         FILES ${corefiles_windows})
+else()
+    source_group("Core\\Linux"                           FILES ${corefiles_linux})
+endif()
 source_group("Misc"                 			             FILES ${miscfiles})
 if(CAULDRON_DX12)
 	source_group("Misc\\DX12"          			             FILES ${miscfiles_dx12})
@@ -263,7 +328,11 @@ endif()
 if(CAULDRON_VK)
 	source_group("Render\\VK"           			         FILES ${renderfiles_vk})
 endif()
-source_group("Render\\Win"          			             FILES ${renderfiles_win})
+if (WIN32)
+    source_group("Render\\Win"          			         FILES ${renderfiles_win})
+else()
+    source_group("Render\\Linux"                         FILES ${renderfiles_linux})
+endif()
 source_group("Shaders"              			             FILES ${shaderfiles})
 source_group("Shaders\\FidelityFX"                           FILES ${fidelityfx_common_shaderfiles})
 source_group("Shaders\\FidelityFX\\spd"                      FILES ${fidelityfx_spd_shaderfiles})

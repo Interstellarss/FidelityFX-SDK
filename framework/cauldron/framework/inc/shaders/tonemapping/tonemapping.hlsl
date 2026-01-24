@@ -22,7 +22,7 @@
 
 #include "tonemappers.hlsl"
 #include "tonemappercommon.h"
-#include "transferfunction.h"
+#include "transferFunction.h"
 #include "lensdistortion.h"
 
 //--------------------------------------------------------------------------------------
@@ -67,17 +67,17 @@ void MainCS(uint3 dtID : SV_DispatchThreadID)
 
         switch (MonitorDisplayMode)
         {
-        case DisplayMode::DISPLAYMODE_LDR:
+        case DISPLAYMODE_LDR:
             color.xyz = ApplyGamma(color.xyz);
             break;
 
-        case DisplayMode::DISPLAYMODE_HDR10_SCRGB:
-        case DisplayMode::DISPLAYMODE_FSHDR_SCRGB:
+        case DISPLAYMODE_HDR10_SCRGB:
+        case DISPLAYMODE_FSHDR_SCRGB:
             color.xyz = ApplyscRGBScale(color.xyz, 0.0f, DisplayMaxLuminance / 80.0f);
             break;
 
-        case DisplayMode::DISPLAYMODE_HDR10_2084:
-        case DisplayMode::DISPLAYMODE_FSHDR_2084:
+        case DISPLAYMODE_HDR10_2084:
+        case DISPLAYMODE_FSHDR_2084:
             // Convert to rec2020 colour space
             color.xyz = mul(ContentToMonitorRecMatrix, color).xyz;
 

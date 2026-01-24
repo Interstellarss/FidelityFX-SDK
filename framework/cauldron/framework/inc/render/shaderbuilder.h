@@ -24,7 +24,7 @@
 
 #include "render/renderdefines.h"
 
-#include <xstring>
+#include <string>
 #include <map>
 #include <vector>
 
@@ -104,7 +104,10 @@ namespace cauldron
         ///
         static inline ShaderBlobDesc Vertex(const void* blobData, const uint64_t blobSize)
         {
-            ShaderBlobDesc desc = { blobData, blobSize, ShaderStage::Vertex };
+            ShaderBlobDesc desc;
+            desc.pData = blobData;
+            desc.DataSize = blobSize;
+            desc.Stage = ShaderStage::Vertex;
             return desc;
         }
 
@@ -112,7 +115,10 @@ namespace cauldron
         ///
         static inline ShaderBlobDesc Pixel(const void* blobData, const uint64_t blobSize)
         {
-            ShaderBlobDesc desc = { blobData, blobSize, ShaderStage::Pixel };
+            ShaderBlobDesc desc;
+            desc.pData = blobData;
+            desc.DataSize = blobSize;
+            desc.Stage = ShaderStage::Pixel;
             return desc;
         }
 
@@ -120,7 +126,10 @@ namespace cauldron
         ///
         static inline ShaderBlobDesc Compute(const void* blobData, const uint64_t blobSize)
         {
-            ShaderBlobDesc desc = { blobData, blobSize, ShaderStage::Compute };
+            ShaderBlobDesc desc;
+            desc.pData = blobData;
+            desc.DataSize = blobSize;
+            desc.Stage = ShaderStage::Compute;
             return desc;
         }
     };

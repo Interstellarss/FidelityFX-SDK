@@ -43,54 +43,37 @@ else()
 	set(FFX_CUSTOM_API ON)
 endif()
 
-# Set configuration types based on what we are building for
-if (NOT FFX_CUSTOM_API)
+	# Set configuration types based on what we are building for
+	if (NOT FFX_CUSTOM_API)
 
-	# Are we buiding the GDK?
-	if (FFX_API_BACKEND STREQUAL GDK_SCARLETT_X64 OR FFX_API_BACKEND STREQUAL GDK_XBOXONE_X64)
-		set(FFX_GDK ON)
-	endif()
-
-	# Pull in tool chain definitions
-	include(toolchain.cmake)
-
-	# If we are NOT building the GDK, queue up DX12/VK solution for building
-	if (NOT FFX_GDK)
-		if (FFX_API_BACKEND STREQUAL DX12_X64 OR
-			FFX_API_BACKEND STREQUAL DX12_ARM64 OR
-			FFX_API_BACKEND STREQUAL DX12_ARM64EC)
-			message(STATUS "Building FidelityFX SDK with DX12 backend")
-		elseif(FFX_API_BACKEND STREQUAL VK_X64)
-			message(STATUS "Building FidelityFX SDK with VK backend")
+		# Are we buiding the GDK?
+		if (FFX_API_BACKEND STREQUAL GDK_SCARLETT_X64 OR FFX_API_BACKEND STREQUAL GDK_XBOXONE_X64)
+			set(FFX_GDK ON)
 		endif()
-	else()
-		# List the API we are building for
-		if(FFX_API_BACKEND STREQUAL GDK_SCARLETT_X64)
-			message(STATUS "Building FidelityFX SDK with GDK Gaming.Scarlett.x64 backend")
-		elseif(FFX_API_BACKEND STREQUAL GDK_XBOXONE_X64)
-			message(STATUS "Building FidelityFX SDK with GDK Gaming.XboxOne.x64 backend")
+
+		# Pull in tool chain definitions (this will set CMAKE_GENERATOR_PLATFORM etc.)
+		include(toolchain.cmake)
+
+		# If we are NOT building the GDK, queue up DX12/VK solution for building
+		if (NOT FFX_GDK)
+			if (FFX_API_BACKEND STREQUAL DX12_X64 OR
+				FFX_API_BACKEND STREQUAL DX12_ARM64 OR
+				FFX_API_BACKEND STREQUAL DX12_ARM64EC)
+				message(STATUS "Building FidelityFX SDK with DX12 backend")
+			elseif(FFX_API_BACKEND STREQUAL VK_X64)
+				message(STATUS "Building FidelityFX SDK with VK backend")
+			endif()
 		else()
-			message(FATAL_ERROR "Requesting unsupported GDK build of FidelityFX SDK!")
+			# List the API we are building for
+			if(FFX_API_BACKEND STREQUAL GDK_SCARLETT_X64)
+				message(STATUS "Building FidelityFX SDK with GDK Gaming.Scarlett.x64 backend")
+			elseif(FFX_API_BACKEND STREQUAL GDK_XBOXONE_X64)
+				message(STATUS "Building FidelityFX SDK with GDK Gaming.XboxOne.x64 backend")
+			else()
+				message(FATAL_ERROR "Requesting unsupported GDK build of FidelityFX SDK!")
+			endif()
 		endif()
 	endif()
-endif()
-
-# Set platform
-if(CMAKE_GENERATOR_PLATFORM STREQUAL "Gaming.Xbox.Scarlett.x64")
-	set(FFX_PLATFORM_NAME gdk_scarlett_x64)
-elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "Gaming.Xbox.XboxOne.x64")
-	set(FFX_PLATFORM_NAME gdk_xboxone_x64)
-elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "x64" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:x64")
-    set(FFX_PLATFORM_NAME x64)
-elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "Win32" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:X86")
-    set(FFX_PLATFORM_NAME x86)
-elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "arm64" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:ARM64")
-    set(FFX_PLATFORM_NAME arm64)
-elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "arm64ec" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:ARM64EC")
-	set(FFX_PLATFORM_NAME arm64ec)
-else()
-    message(FATAL_ERROR "Unsupported target platform \"${CMAKE_GENERATOR_PLATFORM}\"")
-endif()
 
 # Pre-compile shaders
 set(FFX_AUTO_COMPILE_SHADERS ON CACHE BOOL "Compile shaders automatically as a prebuild step.")
@@ -115,47 +98,67 @@ endif()
 # Set configuration types based on what we are building for
 if (NOT FFX_CUSTOM_API)
 
-	# Embed PDBs in the debug versions of the libs
-	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Z7 /Od")
+	# Embed PDBs in the debug versions of the libs (MSVC only)
+	if (MSVC)
+		set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Z7 /Od")
+	endif()
     
-	# Write debug, profile, and release versions of the static libs to the /bin folder as they are uniquely named	
-	set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_HOME_DIRECTORY}/bin/ffx_sdk/)
-	set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_HOME_DIRECTORY}/bin/ffx_sdk/)
-	set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_HOME_DIRECTORY}/bin/ffx_sdk/)
+	# Write debug, profile, and release versions of the static libs to the /bin folder as they are uniquely named
+	set(FFX_OUTPUT_DIR "${CMAKE_BINARY_DIR}/ffx_sdk")
+	if (NOT CMAKE_BINARY_DIR OR "${CMAKE_BINARY_DIR}" STREQUAL "")
+		set(FFX_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffx_sdk")
+	endif()
+	set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG   "${FFX_OUTPUT_DIR}/")
+	set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${FFX_OUTPUT_DIR}/")
+	set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO "${FFX_OUTPUT_DIR}/")
 
 
 	if (FFX_BUILD_AS_DLL)
 		# Write both debug and release versions of the dlls to the /bin folder as they are uniquely named
-		set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_HOME_DIRECTORY}/bin/ffx_sdk/)
-		set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_HOME_DIRECTORY}/bin/ffx_sdk/)
-		set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_HOME_DIRECTORY}/bin/ffx_sdk/)
+		set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${FFX_OUTPUT_DIR}/")
+		set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${FFX_OUTPUT_DIR}/")
+		set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${FFX_OUTPUT_DIR}/")
         set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS FFX_BUILD_AS_DLL)
 	endif()
 else()
 
 	# Ouput the static libs to the /bin folder as they are uniquely named
-	set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${BIN_OUTPUT}/ffx_sdk)
+	set(FFX_OUTPUT_DIR "${BIN_OUTPUT}/ffx_sdk")
+	if (NOT BIN_OUTPUT OR "${BIN_OUTPUT}" STREQUAL "")
+		set(FFX_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffx_sdk")
+	endif()
+
+	set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${FFX_OUTPUT_DIR}")
 	foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
 		string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
-		set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${BIN_OUTPUT}/ffx_sdk/ )
+		set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} "${FFX_OUTPUT_DIR}/" )
 		if (FFX_BUILD_AS_DLL)
 			# Write both debug and release versions of the dlls to the /bin folder as they are uniquely named
-			set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_HOME_DIRECTORY}/bin/ffx_sdk/)
-			set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_HOME_DIRECTORY}/bin/ffx_sdk/)
-			set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_HOME_DIRECTORY}/bin/ffx_sdk/)
+			set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${FFX_OUTPUT_DIR}/")
+			set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${FFX_OUTPUT_DIR}/")
+			set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${FFX_OUTPUT_DIR}/")
 		endif()
 	endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 endif()
 
 if (FFX_FSR3)
-	option(FFX_FSR3UPSCALER "Build FFX FSR3 Upscaler API" ON)
-	option(FFX_FI "Build FFX Frame Interpolation API" ON)
-	option(FFX_OF "Build FFX Optical Flow API" ON)
+    # Respect externally provided values first; otherwise choose defaults
+    if (NOT DEFINED FFX_FSR3UPSCALER)
+        option(FFX_FSR3UPSCALER "Build FFX FSR3 Upscaler API" ON)
+    endif()
+    if (NOT DEFINED FFX_FI)
+        option(FFX_FI "Build FFX Frame Interpolation API" ON)
+    endif()
+    if (NOT DEFINED FFX_OF)
+        option(FFX_OF "Build FFX Optical Flow API" ON)
+    endif()
 endif()
 
 if (FFX_SSSR)
-	option(FFX_DENOISER "Build FFX Denoiser API" ON)
+    if (NOT DEFINED FFX_DENOISER)
+        option(FFX_DENOISER "Build FFX Denoiser API" ON)
+    endif()
 endif()
 
 # Add requred compile definitions
@@ -169,10 +172,20 @@ if(FFX_VS_VERSION STREQUAL 2015 OR FFX_VS_VERSION STREQUAL 2017)
 endif()
 
 # Setup common variables
-set(FFX_SC_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/binary_store/FidelityFX_SC.exe)
+if (UNIX AND NOT WIN32)
+    # On non-Windows platforms, use the native shader compiler built in tools/ffx_shader_compiler.
+    set(FFX_SC_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/ffx_shader_compiler/bin/FidelityFX_SC)
+else()
+    set(FFX_SC_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/binary_store/FidelityFX_SC.exe)
+endif()
 set(FFX_INCLUDE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(FFX_LIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/libs)
-set(FFX_BIN_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin/ffx_sdk)
+if(NOT FFX_BIN_PATH OR "${FFX_BIN_PATH}" STREQUAL "/ffx_sdk")
+    set(FFX_BIN_PATH ${CMAKE_BINARY_DIR}/ffx_sdk)
+    if(NOT CMAKE_BINARY_DIR OR "${CMAKE_BINARY_DIR}" STREQUAL "")
+        set(FFX_BIN_PATH ${CMAKE_CURRENT_BINARY_DIR}/ffx_sdk)
+    endif()
+endif()
 set(FFX_SHARED_PATH ${CMAKE_CURRENT_SOURCE_DIR}/src/shared)
 set(FFX_HOST_PATH ${CMAKE_CURRENT_SOURCE_DIR}/include/FidelityFX/host)
 set(FFX_GPU_PATH ${CMAKE_CURRENT_SOURCE_DIR}/include/FidelityFX/gpu)
@@ -229,6 +242,30 @@ elseif(FFX_API_BACKEND STREQUAL GDK_XBOXONE_X64)
 else()
 	# This is likely a custom include
 	project (FidelityFX-SDK)
+endif()
+
+# Set platform after project() so CMAKE_SIZEOF_VOID_P is available.
+if(CMAKE_GENERATOR_PLATFORM STREQUAL "Gaming.Xbox.Scarlett.x64")
+	set(FFX_PLATFORM_NAME gdk_scarlett_x64)
+elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "Gaming.Xbox.XboxOne.x64")
+	set(FFX_PLATFORM_NAME gdk_xboxone_x64)
+elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "x64" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:x64")
+	set(FFX_PLATFORM_NAME x64)
+elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "Win32" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:X86")
+	set(FFX_PLATFORM_NAME x86)
+elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "arm64" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:ARM64")
+	set(FFX_PLATFORM_NAME arm64)
+elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "arm64ec" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:ARM64EC")
+	set(FFX_PLATFORM_NAME arm64ec)
+elseif((NOT DEFINED CMAKE_GENERATOR_PLATFORM) OR (CMAKE_GENERATOR_PLATFORM STREQUAL ""))
+	# Non-MSVC generators (e.g., Ninja) do not set a platform; default based on pointer size
+	if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+		set(FFX_PLATFORM_NAME x64)
+	else()
+		set(FFX_PLATFORM_NAME x86)
+	endif()
+else()
+	message(FATAL_ERROR "Unsupported target platform \"${CMAKE_GENERATOR_PLATFORM}\"")
 endif()
 
 # Components

@@ -22,6 +22,7 @@
 
 #include "misc/corecounts.h"
 #include "misc/helpers.h"
+#include "misc/log.h"
 
 #if _WINDOWS
     // ACS only works on windows

@@ -28,8 +28,13 @@
 
 #include "shaders/particlecommon.h"
 
+#include <cstdint>
+
 namespace cauldron
 {
+    using UINT = uint32_t;
+    using INT = int32_t;
+
     inline float RandomVariance(float median, float variance)
     {
         float fUnitRandomValue = (float)rand() / (float)RAND_MAX;
@@ -38,23 +43,26 @@ namespace cauldron
     }
 
     ParticleSystem::ParticleSystem(const ParticleSpawnerDesc& particleSpawnerDesc)
+        : m_RenderReady(false)
     {
         m_Name     = particleSpawnerDesc.Name;
         m_Position = particleSpawnerDesc.Position;
         for (auto& emitterDesc : particleSpawnerDesc.Emitters)
         {
-            m_Emitters.push_back(Emitter{emitterDesc.EmitterName,
-                                         emitterDesc.SpawnOffset,
-                                         emitterDesc.SpawnOffsetVariance,
-                                         emitterDesc.SpawnVelocity,
-                                         emitterDesc.SpawnVelocityVariance,
-                                         emitterDesc.ParticlesPerSecond,
-                                         emitterDesc.Lifespan,
-                                         emitterDesc.SpawnSize,
-                                         emitterDesc.KillSize,
-                                         emitterDesc.Mass,
-                                         emitterDesc.AtlasIndex,
-                                         emitterDesc.Flags});
+            Emitter emitter;
+            emitter.EmitterName = emitterDesc.EmitterName;
+            emitter.SpawnOffset = emitterDesc.SpawnOffset;
+            emitter.SpawnOffsetVariance = emitterDesc.SpawnOffsetVariance;
+            emitter.SpawnVelocity = emitterDesc.SpawnVelocity;
+            emitter.SpawnVelocityVariance = emitterDesc.SpawnVelocityVariance;
+            emitter.ParticlesPerSecond = emitterDesc.ParticlesPerSecond;
+            emitter.Lifespan = emitterDesc.Lifespan;
+            emitter.SpawnSize = emitterDesc.SpawnSize;
+            emitter.KillSize = emitterDesc.KillSize;
+            emitter.Mass = emitterDesc.Mass;
+            emitter.AtlasIndex = emitterDesc.AtlasIndex;
+            emitter.Flags = emitterDesc.Flags;
+            m_Emitters.push_back(emitter);
         }
 
         m_Sort = particleSpawnerDesc.Sort;
@@ -201,7 +209,7 @@ namespace cauldron
                 if (emitter.Accumulation > 1.0f)
                 {
                     float integerPart = 0.0f;
-                    float fraction    = modf(emitter.Accumulation, &integerPart);
+                    float fraction    = std::modf(emitter.Accumulation, &integerPart);
 
                     emitter.NumToEmit    = (int)integerPart;
                     emitter.Accumulation = fraction;

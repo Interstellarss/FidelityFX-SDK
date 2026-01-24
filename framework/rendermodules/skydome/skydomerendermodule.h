@@ -101,8 +101,8 @@ private:
     // common
     bool                        m_IsProcedural                = false;
     bool                        m_pShouldRunSkydomeGeneration = true;
-    std::atomic_bool            m_CubemapGenerateReady        = true;
-    std::atomic_bool            m_CubemapCopyReady            = false;
+    std::atomic_bool            m_CubemapGenerateReady;
+    std::atomic_bool            m_CubemapCopyReady;
     SkydomeCBData  m_SkydomeConstantData;
     const cauldron::Texture*    m_pSkyTexture    = nullptr;
     const cauldron::Texture* m_pSkyTextureGenerated = nullptr;

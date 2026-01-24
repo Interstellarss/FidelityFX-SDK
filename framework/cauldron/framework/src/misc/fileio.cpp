@@ -33,13 +33,17 @@
     #define S_ISREG(e) (((e) & _S_IFMT) == _S_IFREG)
     #define S_ISDIR(e) (((e) & _S_IFMT) == _S_IFDIR)
 #else
-    #error Platform needs to implement FileI/O
+    #include <unistd.h>
+    #include <fcntl.h>
+    #include <sys/types.h>
+    #include <sys/stat.h>
 #endif
 
 namespace cauldron
 {
     int64_t ReadFileAll(const wchar_t* fileName, void* buffer, size_t bufferLen)
     {
+#if defined(_WINDOWS)
         // Try to open the file
         int file = -1;
         (void)_wsopen_s(&file, fileName, _O_RDONLY | _O_NOINHERIT | _O_BINARY | _O_SEQUENTIAL, _SH_DENYNO, _S_IREAD);
@@ -102,10 +106,57 @@ namespace cauldron
         (void)_close(file);
 
         return fileLengthBytes;
+#else
+        std::string path = WStringToString(fileName);
+        int file = open(path.c_str(), O_RDONLY);
+        if (file == -1)
+            return -1;
+
+        struct stat fileStatus;
+        if (fstat(file, &fileStatus) != 0)
+        {
+            close(file);
+            return -1;
+        }
+
+        if (!S_ISREG(fileStatus.st_mode))
+        {
+            close(file);
+            return -1;
+        }
+
+        const uint64_t fileLengthBytes = static_cast<uint64_t>(std::max<int64_t>(fileStatus.st_size, 0));
+        if (fileLengthBytes > bufferLen)
+        {
+            close(file);
+            return -1;
+        }
+
+        char* pFileBuffer = reinterpret_cast<char*>(buffer);
+        for (uint64_t bytesLeft = fileLengthBytes; bytesLeft > 0;)
+        {
+            size_t bytesRequested = static_cast<size_t>(std::min<uint64_t>(bytesLeft, INT32_MAX));
+            ssize_t bytesReceived = read(file, pFileBuffer, bytesRequested);
+            if (bytesReceived > 0)
+            {
+                bytesLeft -= static_cast<uint64_t>(bytesReceived);
+                pFileBuffer += bytesReceived;
+            }
+            else
+            {
+                close(file);
+                return -1;
+            }
+        }
+
+        close(file);
+        return fileLengthBytes;
+#endif
     }
 
     int64_t ReadFilePartial(const wchar_t* fileName, void* buffer, size_t bufferLen, int64_t readOffset/*= 0*/)
     {
+#if defined(_WINDOWS)
         // Try to open the file
         int file = -1;
         (void)_wsopen_s(&file, fileName, _O_RDONLY | _O_NOINHERIT | _O_BINARY | _O_SEQUENTIAL, _SH_DENYNO, _S_IREAD);
@@ -177,10 +228,67 @@ namespace cauldron
         (void)_close(file);
 
         return bufferLen;
+#else
+        std::string path = WStringToString(fileName);
+        int file = open(path.c_str(), O_RDONLY);
+        if (file == -1)
+            return -1;
+
+        struct stat fileStatus;
+        if (fstat(file, &fileStatus) != 0)
+        {
+            close(file);
+            return -1;
+        }
+
+        if (!S_ISREG(fileStatus.st_mode))
+        {
+            close(file);
+            return -1;
+        }
+
+        const uint64_t fileLengthBytes = static_cast<uint64_t>(std::max<int64_t>(fileStatus.st_size, 0));
+        if (fileLengthBytes < bufferLen)
+        {
+            close(file);
+            return -1;
+        }
+
+        if (readOffset)
+        {
+            off_t offset = lseek(file, static_cast<off_t>(readOffset), SEEK_SET);
+            if (offset != readOffset)
+            {
+                close(file);
+                return -1;
+            }
+        }
+
+        char* pFileBuffer = reinterpret_cast<char*>(buffer);
+        for (uint64_t bytesLeft = bufferLen; bytesLeft > 0;)
+        {
+            size_t bytesRequested = static_cast<size_t>(std::min<uint64_t>(bytesLeft, INT32_MAX));
+            ssize_t bytesReceived = read(file, pFileBuffer, bytesRequested);
+            if (bytesReceived > 0)
+            {
+                bytesLeft -= static_cast<uint64_t>(bytesReceived);
+                pFileBuffer += bytesReceived;
+            }
+            else
+            {
+                close(file);
+                return -1;
+            }
+        }
+
+        close(file);
+        return bufferLen;
+#endif
     }
 
     int64_t GetFileSize(const wchar_t* fileName)
     {
+#if defined(_WINDOWS)
         // Try to open
         int file = -1;
         (void)_wsopen_s(&file, fileName, _O_RDONLY | _O_NOINHERIT | _O_BINARY | _O_SEQUENTIAL, _SH_DENYNO, _S_IREAD);
@@ -201,6 +309,13 @@ namespace cauldron
         (void)_close(file);
 
         return fileStatus.st_size;
+#else
+        std::string path = WStringToString(fileName);
+        struct stat fileStatus;
+        if (stat(path.c_str(), &fileStatus) != 0)
+            return -1;
+        return fileStatus.st_size;
+#endif
     }
 
     bool ParseJsonFile(const wchar_t* fileName, json& jsonOut)

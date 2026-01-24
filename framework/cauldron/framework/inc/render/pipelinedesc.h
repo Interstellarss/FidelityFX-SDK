@@ -136,12 +136,12 @@ namespace cauldron
         /**
          * @brief   Add a shader to the pipeline description.
          */
-        void AddShaderDesc(ShaderBuildDesc& shaderDesc);
+        void AddShaderDesc(ShaderBuildDesc shaderDesc);
 
         /**
          * @brief   Add a shader blob to the pipeline description.
          */
-        void AddShaderBlobDesc(ShaderBlobDesc& shaderBlobDesc);
+        void AddShaderBlobDesc(ShaderBlobDesc shaderBlobDesc);
 
         /**
          * @brief   Add the format of the render targets.

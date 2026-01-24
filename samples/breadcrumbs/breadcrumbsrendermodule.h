@@ -88,6 +88,8 @@ private:
     uint32_t                    m_GpuQueue = 0;
     // Number of crashing frame where faulty commands are submitted to GPU, causing shader hang and in result crash will be reported.
     uint64_t                    m_CrashFrame = 2800;
+    bool                        m_DumpPending = false;
+    uint32_t                    m_DumpIndex = 0;
 
     bool                        m_BreadContextCreated = false;
     void*                       m_BackendScratchBuffer = nullptr;
@@ -99,6 +101,7 @@ private:
     cauldron::PipelineObject*   m_pPipeline = nullptr;
     cauldron::ParameterSet*     m_pParams = nullptr;
 
+    void DumpBreadcrumbsNow();
     static void ProcessDeviceRemovedEvent(void* data);
 /// @}
 };

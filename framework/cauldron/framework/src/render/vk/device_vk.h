@@ -85,12 +85,14 @@ namespace cauldron
         uint64_t ExecuteCommandLists(std::vector<CommandList*>& cmdLists, CommandQueue queueType, VkSemaphore waitSemaphore);
 
         uint64_t GetLatestSemaphoreValue(CommandQueue queueType);
+        void EnsureFrameSemaphoreCount(uint32_t numFramesInFlight);
 
         void ReleaseCommandPool(CommandList* pCmdList);
 
         const VkDevice VKDevice() const { return m_Device; }
         VkDevice VKDevice() { return m_Device; }
         const VkPhysicalDevice VKPhysicalDevice() const { return m_PhysicalDevice; }
+        const VkInstance VKInstance() const { return m_Instance; }
         VmaAllocator GetVmaAllocator() const { return m_VmaAllocator; }
         VkSampler GetDefaultSampler() const { return m_DefaultSampler; }
         BufferAddressInfo GetDepthToColorCopyBuffer(VkDeviceSize size);
@@ -201,6 +203,7 @@ namespace cauldron
 
             void Wait(VkDevice device, uint64_t waitValue) const;
             uint64_t QueryLastCompletedValue(VkDevice device) const;
+            void EnsureFrameSemaphoreCount(VkDevice device, uint32_t numFramesInFlight);
 
             void Flush();
 

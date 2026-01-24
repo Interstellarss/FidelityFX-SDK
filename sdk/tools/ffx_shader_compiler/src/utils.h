@@ -22,8 +22,12 @@
 
 #pragma once
 
+#ifdef _WIN32
 #include "pch.hpp"
 #include "DXBCChecksum.h"
+#endif
+
+#include <string>
 
 std::string WCharToUTF8(const std::wstring& wstr);
 std::wstring UTF8ToWChar(const std::string& str);

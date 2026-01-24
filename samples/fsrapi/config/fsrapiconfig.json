@@ -6,12 +6,12 @@
             "ReactiveMask": {
                 "Format": "R8_UNORM",
                 "AllowUAV": true,
-                "RenderResolution": false
+                "RenderResolution": true
             },
             "TransCompMask": {
                 "Format": "R8_UNORM",
                 "AllowUAV": true,
-                "RenderResolution": false
+                "RenderResolution": true
             }
         },
 
@@ -21,8 +21,8 @@
             "LightingRenderModule",
             "SkyDomeRenderModule",
             "AnimatedTexturesRenderModule",
-            "TranslucencyRenderModule",
             "GPUParticleRenderModule",
+            "TranslucencyRenderModule",
             "TAARenderModule",
             "FSRApiRenderModule",
             "ToneMappingRenderModule"
@@ -35,15 +35,6 @@
         },
 
         "Content": {
-            "Scenes": [
-                "../media/SponzaNew/MainSponza.gltf"
-            ],
-            "Camera": "PhysCamera003",
-            "DiffuseIBL": "../media/IBL/mud_road_puresky_Diffuse.dds",
-            "SpecularIBL": "../media/IBL/mud_road_puresky_Specular.dds",
-            "SceneExposure": 1.355,
-            "IBLFactor": 0.035,
-
             "ParticleSpawners": [
                 {
                     "Name": "FSRSpawner",
@@ -53,12 +44,12 @@
                     "Emitters": [
                         {
                             "Name": "Smoke",
-                            "SpawnOffset": [ 3.0, 0.0, 1.4 ],
+                            "SpawnOffset": [ 0.0, 0.0, 1.4 ],
                             "SpawnOffsetVariance": [ 0.1, 0.0, 0.1 ],
                             "SpawnVelocity": [ 0.0, 0.2, 0.0 ],
                             "SpawnVelocityVariance": 1.0,
-                            "ParticlesPerSecond": 10,
-                            "Lifespan": 50.0,
+                            "ParticlesPerSecond": 50,
+                            "Lifespan": 10.0,
                             "SpawnSize": 0.4,
                             "KillSize": 1.0,
                             "Mass": 0.0003,
@@ -67,27 +58,18 @@
                                 "Reactive": true,
                                 "Streaks": false
                             }
-                        },
-                        {
-                            "Name": "Spark",
-                            "SpawnOffset": [ -3.0, 0.0, -1.4 ],
-                            "SpawnOffsetVariance": [ 0.05, 0.0, 0.05 ],
-                            "SpawnVelocity": [ 0.0, 4.0, 0.0 ],
-                            "SpawnVelocityVariance": 0.5,
-                            "ParticlesPerSecond": 500,
-                            "Lifespan": 1.0,
-                            "SpawnSize": 0.02,
-                            "KillSize": 0.02,
-                            "Mass": 1.0,
-                            "AtlasIndex": 1,
-                            "Flags": {
-                                "Reactive": true,
-                                "Streaks": true
-                            }
                         }
                     ]
                 }
-            ]
+            ],
+            "Scenes": [
+                "../media/SponzaNew/MainSponza.gltf"
+            ],
+            "Camera": "PhysCamera003",
+            "DiffuseIBL": "../media/IBL/mud_road_puresky_Diffuse.dds",
+            "SpecularIBL": "../media/IBL/mud_road_puresky_Specular.dds",
+            "SceneExposure": 1.355,
+            "IBLFactor": 0.035
         },
 
         "FPSLimiter": {

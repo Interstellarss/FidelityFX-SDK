@@ -27,7 +27,9 @@
 #include "render/shaderbuilder.h"
 #include "helpers.h"
 
+#if defined(_WIN)
 #include "dxc/inc/dxcapi.h"
+#endif
 
 #include <algorithm>
 #include <array>

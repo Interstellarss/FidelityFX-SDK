@@ -49,7 +49,11 @@ void AnimatedTexturesRenderModule::Init(const json& initData)
     RootSignatureDesc signatureDesc;
     signatureDesc.AddConstantBufferView(0, ShaderBindStage::VertexAndPixel, 1);
     signatureDesc.AddTextureSRVSet(0, ShaderBindStage::Pixel, 1);
-    SamplerDesc samplerDesc = {FilterFunc::Anisotropic, AddressMode::Wrap, AddressMode::Wrap, AddressMode::Wrap};
+    SamplerDesc samplerDesc;
+    samplerDesc.Filter = FilterFunc::Anisotropic;
+    samplerDesc.AddressU = AddressMode::Wrap;
+    samplerDesc.AddressV = AddressMode::Wrap;
+    samplerDesc.AddressW = AddressMode::Wrap;
     signatureDesc.AddStaticSamplers(0, ShaderBindStage::Pixel, 1, &samplerDesc);
 
     m_pRootSignature = RootSignature::CreateRootSignature(L"AnimatedTextures_RootSignature", signatureDesc);
@@ -113,9 +117,9 @@ void AnimatedTexturesRenderModule::Init(const json& initData)
         [this](const std::vector<const Texture*>& textures, void* additionalParams) { this->TextureLoadComplete(textures, additionalParams); };
 
     std::vector<TextureLoadInfo> texturesToLoad;
-    texturesToLoad.push_back(TextureLoadInfo(L"..\\media\\Textures\\AnimatedTextures\\lion.jpg"));
-    texturesToLoad.push_back(TextureLoadInfo(L"..\\media\\Textures\\AnimatedTextures\\checkerboard.dds"));
-    texturesToLoad.push_back(TextureLoadInfo(L"..\\media\\Textures\\AnimatedTextures\\composition_text.dds"));
+    texturesToLoad.push_back(TextureLoadInfo(L"../media/Textures/AnimatedTextures/lion.jpg"));
+    texturesToLoad.push_back(TextureLoadInfo(L"../media/Textures/AnimatedTextures/checkerboard.dds"));
+    texturesToLoad.push_back(TextureLoadInfo(L"../media/Textures/AnimatedTextures/composition_text.dds"));
     GetContentManager()->LoadTextures(texturesToLoad, CompletionCallback);
 
     // Register UI
@@ -208,7 +212,13 @@ void AnimatedTexturesRenderModule::Execute(double deltaTime, cauldron::CommandLi
         height = resInfo.RenderHeight;
     }
 
-    Viewport vp = {0.f, 0.f, (float)width, (float)height, 0.f, 1.f};
+    Viewport vp;
+    vp.X = 0.f;
+    vp.Y = 0.f;
+    vp.Width = static_cast<float>(width);
+    vp.Height = static_cast<float>(height);
+    vp.MinDepth = 0.f;
+    vp.MaxDepth = 1.f;
     SetViewport(pCmdList, &vp);
     Rect scissorRect = {0, 0, width, height};
     SetScissorRects(pCmdList, 1, &scissorRect);

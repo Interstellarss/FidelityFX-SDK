@@ -22,11 +22,15 @@
 
 cmake_minimum_required(VERSION 3.17)
 
+message(STATUS "CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
+message(STATUS "CMAKE_SYSTEM_NAME: ${CMAKE_SYSTEM_NAME}")
 
 project(FidelityFX_SC)
 
 # Enable multi-threaded compilation
-add_compile_options(/MP)
+if (MSVC)
+    add_compile_options(/MP)
+endif()
 
 # General language options (require language standards specified)
 set(CMAKE_CXX_STANDARD 17)
@@ -41,17 +45,21 @@ if (MSVC)
     set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} /W3")
 endif()
 
-if (CMAKE_GENERATOR_PLATFORM STREQUAL x64 OR
-    CMAKE_GENERATOR_PLATFORM STREQUAL ARM64 OR
-    CMAKE_GENERATOR_PLATFORM STREQUAL ARM64EC)
-	#Set so taken by default when creating custom configs
-	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD")
-	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MDd")
+if (MSVC)
+    if (CMAKE_GENERATOR_PLATFORM STREQUAL x64 OR
+        CMAKE_GENERATOR_PLATFORM STREQUAL ARM64 OR
+        CMAKE_GENERATOR_PLATFORM STREQUAL ARM64EC)
+        #Set so taken by default when creating custom configs
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MDd")
+    endif()
 endif()
 
 # Check for Visual Studio 2019's build tooling
-if(MSVC_TOOLSET_VERSION VERSION_LESS 142)
-    message(FATAL_ERROR "Cannot find MSVC toolset version 142 or greater. Please make sure Visual Studio 2019 or newer installed")
+if(MSVC)
+    if(MSVC_TOOLSET_VERSION VERSION_LESS 142)
+        message(FATAL_ERROR "Cannot find MSVC toolset version 142 or greater. Please make sure Visual Studio 2019 or newer installed")
+    endif()
 endif()
 
 # Generate the output binary in the /bin directory
@@ -108,11 +116,21 @@ function(copyTargetCommand list dest returned_target_name)
 endfunction()
 
 # Set sources
-file(GLOB sources
-	"${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
-	"${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
-	"${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp")
+if(WIN32)
+    file(GLOB sources
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp")
+else()
+    file(GLOB sources
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ffx_sc.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/glsl_compiler.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/glsl_compiler.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/utils.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/utils.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/compiler.h")
+endif()
 
 # Append lib sources
 list(APPEND sources
@@ -126,13 +144,19 @@ add_executable(${PROJECT_NAME} ${sources})
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
 # Add external libs
-add_subdirectory(libs/agilitysdk)
-add_subdirectory(libs/dxc)
+if(WIN32)
+    add_subdirectory(libs/agilitysdk)
+    add_subdirectory(libs/dxc)
+endif()
 add_subdirectory(libs/glslangValidator)
 add_subdirectory(libs/tiny-process-library)
 
 # Add link time dependencies
-target_link_libraries (${PROJECT_NAME} dxguid agilitysdk dxc glslangValidator tiny-process-library)
+if(WIN32)
+    target_link_libraries (${PROJECT_NAME} dxguid agilitysdk dxc glslangValidator tiny-process-library)
+else()
+    target_link_libraries (${PROJECT_NAME} glslangValidator tiny-process-library)
+endif()
 target_include_directories (${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libs/MD5
                                                    ${CMAKE_CURRENT_SOURCE_DIR}/libs/SPIRV-Reflect
                                                    ${CMAKE_CURRENT_SOURCE_DIR}/libs/tiny-process-library)

@@ -30,6 +30,8 @@
 #include <memory>
 #include <thread>
 #include <vector>
+#include <atomic>
+#include <condition_variable>
 
 namespace cauldron
 {
@@ -114,7 +116,7 @@ namespace cauldron
         /**
          * @brief   Enqueues a task for execution.
          */
-        void AddTask(Task& newTask);
+        void AddTask(Task newTask);
 
         /**
          * @brief   Enqueues multiple tasks for execution.

@@ -143,7 +143,11 @@ namespace cauldron
             LogPriority(level) 
         {
             tm ts;
+#if defined(_WIN32)
             localtime_s(&ts, &time);
+#else
+            localtime_r(&time, &ts);
+#endif
             wchar_t time_buf[16];
             wcsftime(time_buf, 16, L"[%H:%M:%S]", &ts);
             LogMessage = time_buf;

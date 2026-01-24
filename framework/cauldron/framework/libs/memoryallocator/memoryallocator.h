@@ -19,7 +19,9 @@
 
 #pragma once
 
+#if defined(_WIN32)
 #define VK_USE_PLATFORM_WIN32_KHR
+#endif
 
 // we are supporting up to Vulkan 1.3 for now
 #define VMA_VULKAN_VERSION 1003000

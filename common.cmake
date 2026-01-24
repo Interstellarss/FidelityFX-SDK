@@ -21,10 +21,12 @@
 # THE SOFTWARE.
 
 # Enables multithreading compilation
-add_compile_options(/MP)
+if (MSVC)
+    add_compile_options(/MP)
+endif()
 
 # General language options (require language standards specified)
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -52,10 +54,15 @@ set(RENDERMODULE_MEDIA_OUTPUT ${BIN_OUTPUT}/media/rendermodule)
 set(SUPPORT_RUNTIME_SHADER_RECOMPILE 0)
 
 # Define common sdk variables
-set(FFX_SC_EXECUTABLE ${SDK_ROOT}/tools/binary_store/FidelityFX_SC.exe)
+if (UNIX AND NOT WIN32)
+	set(FFX_SC_EXECUTABLE ${SDK_ROOT}/tools/ffx_shader_compiler/bin/FidelityFX_SC)
+else()
+	set(FFX_SC_EXECUTABLE ${SDK_ROOT}/tools/binary_store/FidelityFX_SC.exe)
+endif()
 set(FFX_INCLUDE_PATH ${SDK_ROOT}/include)
 set(FFX_LIB_PATH ${SDK_ROOT}/libs)
-set(FFX_BIN_PATH ${SDK_ROOT}/bin/ffx_sdk)
+# Use build directory instead of /ffx_sdk to avoid permission issues
+set(FFX_BIN_PATH ${CMAKE_BINARY_DIR}/ffx_sdk)
 set(FFX_SHARED_PATH ${SDK_ROOT}/src/shared)
 set(FFX_HOST_PATH ${SDK_ROOT}/include/FidelityFX/host)
 set(FFX_GPU_PATH ${SDK_ROOT}/include/FidelityFX/gpu)

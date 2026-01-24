@@ -40,6 +40,7 @@
 #define FFX_OPTICALFLOW_MAX_QUEUED_FRAMES 16
 
 #include "ffx_opticalflow_private.h"
+#include <cstring>
 
 typedef struct Binding
 {

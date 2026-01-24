@@ -122,7 +122,7 @@ private:
     {
         const cauldron::Entity*  pOwner   = nullptr;
         const cauldron::Surface* pSurface = nullptr;
-        TextureIndices           TextureIndices;
+        TextureIndices           textureIndices;
     };
 
     struct PipelineRenderGroup

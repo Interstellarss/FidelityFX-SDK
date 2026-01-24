@@ -62,7 +62,7 @@ ffxReturnCode_t CreateBackend(const ffxCreateContextDescHeader *desc, bool& back
             backendFound = true;
 
             const auto *backendDesc = reinterpret_cast<const ffxCreateBackendVKDesc*>(it);
-            VkDeviceContext deviceContext = { backendDesc->vkDevice, backendDesc->vkPhysicalDevice, backendDesc->vkDeviceProcAddr };
+            VkDeviceContext deviceContext = { backendDesc->vkDevice, backendDesc->vkPhysicalDevice, VK_NULL_HANDLE, backendDesc->vkDeviceProcAddr, nullptr };
             FfxDevice device = ffxGetDeviceVK(&deviceContext);
             size_t scratchBufferSize = ffxGetScratchMemorySizeVK(backendDesc->vkPhysicalDevice, contexts);
             void* scratchBuffer = alloc.alloc(scratchBufferSize);

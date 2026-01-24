@@ -24,6 +24,26 @@ if(NOT ${FFX_API_VK})
     return()
 endif()
 
+# Workaround for Linux+Ninja integration:
+# Some parts of the SDK build reference marker files named
+# *PERMUTATION_OUTPUTS in this directory. Ensure they exist so
+# Ninja does not fail on missing sources with no rule to make them.
+foreach(marker
+        FSR2_PERMUTATION_OUTPUTS
+        FSR3UPSCALER_PERMUTATION_OUTPUTS
+        FRAMEINTERPOLATION_PERMUTATION_OUTPUTS
+        OPTICALFLOW_PERMUTATION_OUTPUTS
+        CLASSIFIER_PERMUTATION_OUTPUTS
+        CAS_PERMUTATION_OUTPUTS
+        DENOISER_PERMUTATION_OUTPUTS
+        LPM_PERMUTATION_OUTPUTS
+        BRIXELIZER_PERMUTATION_OUTPUTS
+        BRIXELIZER_GI_PERMUTATION_OUTPUTS
+        SPD_PERMUTATION_OUTPUTS
+        SSSR_PERMUTATION_OUTPUTS)
+    file(TOUCH "${CMAKE_CURRENT_BINARY_DIR}/${marker}")
+endforeach()
+
 #include CMake custom command generator functions for compiling shaders.
 include("${FFX_GPU_PATH}/CMakeCompileShaders.txt")
 
@@ -53,8 +73,6 @@ file(GLOB PRIVATE_SOURCE
 	"${FFX_SRC_BACKENDS_PATH}/shared/blob_accessors/"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/FrameInterpolationSwapchain/*.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/FrameInterpolationSwapchain/*.cpp"
 )
 
 if (FFX_FSR1 OR FFX_ALL)
@@ -112,6 +130,11 @@ if (FFX_FSR3UPSCALER OR FFX_ALL)
 endif()
 
 if (FFX_FI OR FFX_ALL)
+    file(GLOB FFX_FI_BACKEND_SOURCE
+        "${CMAKE_CURRENT_SOURCE_DIR}/FrameInterpolationSwapchain/*.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/FrameInterpolationSwapchain/*.cpp")
+    list(APPEND PRIVATE_SOURCE ${FFX_FI_BACKEND_SOURCE})
+
 	set(FFX_FI_PRIVATE_SOURCE
 		"${FFX_SRC_BACKENDS_PATH}/shared/blob_accessors/ffx_frameinterpolation_shaderblobs.h"
 		"${FFX_SRC_BACKENDS_PATH}/shared/blob_accessors/ffx_frameinterpolation_shaderblobs.cpp")
@@ -552,6 +575,9 @@ if (FFX_CLASSIFIER OR FFX_ALL)
     target_compile_definitions(ffx_backend_vk_${FFX_PLATFORM_NAME} PRIVATE FFX_CLASSIFIER)
     include (CMakeShadersClassifier.txt)
 endif()
+
+# Debug: show collected shader permutation outputs before creating the target
+message(STATUS "FFX_SC_PERMUTATION_OUTPUTS (final): ${FFX_SC_PERMUTATION_OUTPUTS}")
 
 add_custom_target(ffx_shader_permutations_vk DEPENDS ${FFX_SC_PERMUTATION_OUTPUTS})
 add_dependencies(${FFX_SC_DEPENDENT_TARGET} ffx_shader_permutations_vk)

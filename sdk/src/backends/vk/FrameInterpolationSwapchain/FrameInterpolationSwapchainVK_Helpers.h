@@ -23,16 +23,21 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <cmath>
+#include <mutex>
 
 #include <FidelityFX/host/ffx_assert.h>
 #include <FidelityFX/host/backends/vk/ffx_vk.h>
 
+#ifdef _WIN32
 #include <Windows.h>
 #include <synchapi.h>
 
-
 void waitForPerformanceCount(const int64_t targetCount);
-
+#else
+// On non-Windows platforms this helper is a no-op.
+inline void waitForPerformanceCount(const int64_t) {}
+#endif
 
 struct SubmissionSemaphores
 {
@@ -260,6 +265,7 @@ public:
     }
 };
 
+#ifdef _WIN32
 template <size_t NumFamilies, size_t Capacity>
 class VulkanCommandPool
 {
@@ -342,6 +348,83 @@ public:
         return pCommands;
     }
 };
+#else
+template <size_t NumFamilies, size_t Capacity>
+class VulkanCommandPool
+{
+public:
+private:
+    std::mutex       mutex;
+    uint32_t         queueFamilyIndices[NumFamilies] = {};
+    VkCommands       buffer[NumFamilies][Capacity]   = {};
+
+public:
+    VulkanCommandPool()
+    {
+        for (size_t familyIndex = 0; familyIndex < NumFamilies; familyIndex++)
+            queueFamilyIndices[familyIndex] = UINT32_MAX;
+    }
+
+    ~VulkanCommandPool()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        for (size_t familyIndex = 0; familyIndex < NumFamilies; familyIndex++)
+        {
+            for (size_t idx = 0; idx < Capacity; idx++)
+            {
+                auto& cmds = buffer[familyIndex][idx];
+                while (cmds.initiated() && !cmds.available())
+                {
+                    // wait for list to be idling
+                }
+                cmds.release();
+            }
+
+            queueFamilyIndices[familyIndex] = UINT32_MAX;
+        }
+    }
+
+    VkCommands* get(VkDevice device, VulkanQueue queue, const char* name)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        uint32_t familyIndex = 0;
+        // find family index
+        for (; familyIndex < NumFamilies; familyIndex++)
+        {
+            if (queueFamilyIndices[familyIndex] == queue.familyIndex)
+            {
+                break;
+            }
+            else if (queueFamilyIndices[familyIndex] == UINT32_MAX)
+            {
+                queueFamilyIndices[familyIndex] = queue.familyIndex;
+                break;
+            }
+        }
+
+        FFX_ASSERT(familyIndex < NumFamilies);
+
+        VkCommands* pCommands = nullptr;
+
+        for (size_t idx = 0; idx < Capacity && (pCommands == nullptr); idx++)
+        {
+            auto& cmds = buffer[familyIndex][idx];
+            if (cmds.verify(device, queue.familyIndex) && cmds.available())
+            {
+                pCommands = &cmds;
+            }
+        }
+
+        FFX_ASSERT(pCommands);
+
+        pCommands->occupy(queue, name);
+
+        return pCommands;
+    }
+};
+#endif
 
 template <const int Size, typename Type = double>
 struct SimpleMovingAverage
@@ -388,7 +471,7 @@ struct SimpleMovingAverage
             variance /= iterations;
         }
 
-        return sqrt(variance);
+        return std::sqrt(variance);
     }
 
     void reset()

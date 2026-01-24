@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include "lightingRenderModule.h"
+#include "lightingrendermodule.h"
 #include "render/pipelineobject.h"
 #include "render/profiler.h"
 #include "render/shadowmapresourcepool.h"
@@ -31,8 +31,14 @@
 #include "core/uimanager.h"
 
 #include "render/parameterset.h"
+#include "render/rasterview.h"
+#include "render/resourceview.h"
+#include "render/resourceviewallocator.h"
 
 #include "shaders/surfacerendercommon.h"
+
+#include <cstdlib>
+#include <cstring>
 
 using namespace cauldron;
 using namespace std::experimental;
@@ -169,6 +175,58 @@ LightingRenderModule::~LightingRenderModule()
 
 void LightingRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 {
+    const char* debugLightingClear = std::getenv("CAULDRON_DEBUG_LIGHTING_CLEAR");
+    if (debugLightingClear && std::strcmp(debugLightingClear, "1") == 0)
+    {
+        static bool s_logged = false;
+        if (!s_logged)
+        {
+            CauldronWarning(L"LightingRenderModule: CAULDRON_DEBUG_LIGHTING_CLEAR=1");
+            s_logged = true;
+        }
+
+        static ResourceView* s_debugUavGpu = nullptr;
+        static ResourceView* s_debugUavCpu = nullptr;
+        if (!s_debugUavGpu || !s_debugUavCpu)
+        {
+            auto* allocator = GetResourceViewAllocator();
+            allocator->AllocateGPUResourceViews(&s_debugUavGpu, 1);
+            allocator->AllocateCPUResourceViews(&s_debugUavCpu, 1);
+            s_debugUavGpu->BindTextureResource(m_pRenderTarget->GetResource(),
+                                               m_pRenderTarget->GetDesc(),
+                                               ResourceViewType::TextureUAV,
+                                               ViewDimension::Texture2D,
+                                               0,
+                                               -1,
+                                               0,
+                                               0);
+            s_debugUavCpu->BindTextureResource(m_pRenderTarget->GetResource(),
+                                               m_pRenderTarget->GetDesc(),
+                                               ResourceViewType::TextureUAV,
+                                               ViewDimension::Texture2D,
+                                               0,
+                                               -1,
+                                               0,
+                                               0);
+        }
+
+        const GPUResource* hdrResource = m_pRenderTarget->GetResource();
+        ResourceState hdrState = hdrResource->GetCurrentResourceState();
+        Barrier hdrBarrier = Barrier::Transition(hdrResource, hdrState, ResourceState::UnorderedAccess);
+        ResourceBarrier(pCmdList, 1, &hdrBarrier);
+
+        float debugColor[4] = {1.0f, 1.0f, 0.1f, 1.0f};
+        ResourceViewInfo hdrUavGpu = s_debugUavGpu->GetViewInfo();
+        ResourceViewInfo hdrUavCpu = s_debugUavCpu->GetViewInfo();
+        ClearUAVFloat(pCmdList, hdrResource, &hdrUavGpu, &hdrUavCpu, debugColor);
+
+        hdrBarrier = Barrier::Transition(hdrResource,
+                                         ResourceState::UnorderedAccess,
+                                         ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource);
+        ResourceBarrier(pCmdList, 1, &hdrBarrier);
+        return;
+    }
+
     if(GetScene()->GetBRDFLutTexture())
     {
         m_pParameters->SetTextureSRV(GetScene()->GetBRDFLutTexture(), ViewDimension::Texture2D, 4);

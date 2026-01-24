@@ -23,6 +23,47 @@
 #pragma once
 
 #include <FidelityFX/host/ffx_types.h>
+#if __cplusplus >= 202002L
+#include <bit>
+#endif
+
+// Platform compatibility helpers for non-MSVC toolchains.
+#if !defined(_MSC_VER)
+#include <wchar.h>
+#include <string.h>
+#include <stdio.h>
+
+// MSVC-style countof for static arrays.
+#ifndef _countof
+#define _countof(arr) (sizeof(arr) / sizeof((arr)[0]))
+#endif
+
+// Safe wide-string copy/format functions used in SDK sources.
+#ifndef wcscpy_s
+// Most SDK call sites use 2-arg form: wcscpy_s(dest, L"...").
+static inline void ffx_wcscpy_s_impl(wchar_t* dest, size_t destSize, const wchar_t* src)
+{
+    if (!dest || destSize == 0) {
+        return;
+    }
+    if (!src) {
+        dest[0] = L'\0';
+        return;
+    }
+    wcsncpy(dest, src, destSize - 1);
+    dest[destSize - 1] = L'\0';
+}
+#define wcscpy_s(dest, src) ffx_wcscpy_s_impl((dest), _countof(dest), (src))
+#endif
+
+#ifndef swprintf_s
+#define swprintf_s swprintf
+#endif
+
+#ifndef sprintf_s
+#define sprintf_s(dest, size, ...) snprintf((dest), (size), __VA_ARGS__)
+#endif
+#endif
 
 /// @defgroup Utils Utilities
 /// Utility Macros used by the FidelityFX SDK

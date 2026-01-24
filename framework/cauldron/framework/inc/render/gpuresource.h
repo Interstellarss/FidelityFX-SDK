@@ -221,13 +221,22 @@ namespace cauldron
 
         static Barrier Transition(const GPUResource* pRes, ResourceState srcState, ResourceState dstState, uint32_t subResource = 0xffffffff)
         {
-            Barrier barrier = { BarrierType::Transition, pRes, srcState, dstState, subResource };
+            Barrier barrier;
+            barrier.Type = BarrierType::Transition;
+            barrier.pResource = pRes;
+            barrier.SourceState = srcState;
+            barrier.DestState = dstState;
+            barrier.SubResource = subResource;
             return barrier;
         }
 
         static Barrier UAV(const GPUResource* pRes)
         {
-            Barrier barrier = {BarrierType::UAV, pRes, ResourceState::UnorderedAccess, ResourceState::UnorderedAccess};
+            Barrier barrier;
+            barrier.Type = BarrierType::UAV;
+            barrier.pResource = pRes;
+            barrier.SourceState = ResourceState::UnorderedAccess;
+            barrier.DestState = ResourceState::UnorderedAccess;
             return barrier;
         }
     };

@@ -24,8 +24,11 @@
 #include "misc/assert.h"
 
 #include <cstdarg>
+#include <cstring>
 #include <iostream>
+#include <locale>
 #include <sstream>
+#include <vector>
 
 #ifdef WIN32
 #include <debugapi.h>
@@ -36,11 +39,42 @@ namespace cauldron
     //////////////////////////////////////////////////////////////////////////
     // Helpers
 
+    int GetFormattedLengthV(const wchar_t* format, va_list args)
+    {
+#if defined(_WIN32)
+        return _vscwprintf(format, args);
+#else
+        int buffer_size = 256;
+        std::vector<wchar_t> buffer(buffer_size);
+        for (;;)
+        {
+            va_list args_copy;
+            va_copy(args_copy, args);
+            int len = vswprintf(buffer.data(), buffer.size(), format, args_copy);
+            va_end(args_copy);
+
+            if (len >= 0 && len < static_cast<int>(buffer.size()))
+                return len;
+
+            if (len >= 0)
+                buffer_size = len + 1;
+            else
+                buffer_size *= 2;
+
+            if (buffer_size > (1 << 20))
+                return 0;
+
+            buffer.resize(buffer_size);
+        }
+#endif
+        return 0;
+    }
+
     int GetFormattedLength(const wchar_t* format, ...)
     {
         va_list vl;
         va_start(vl, format);
-        int len = _vscwprintf(L" (%ls: %d)", vl);
+        int len = GetFormattedLengthV(format, vl);
         va_end(vl);
         return len;
     }
@@ -49,7 +83,13 @@ namespace cauldron
     {
         va_list vl;
         va_start(vl, format);
+#if defined(_WIN32)
         int len = _vsnwprintf_s(data, length, length, format, vl);
+#else
+        int len = vswprintf(data, static_cast<size_t>(length), format, vl);
+        if (len < 0)
+            len = 0;
+#endif
         va_end(vl);
         return len;
     }
@@ -58,7 +98,11 @@ namespace cauldron
     {
         time_t t = msg.Time();
         tm ts;
+#if defined(_WIN32)
         localtime_s(&ts, &t);
+#else
+        localtime_r(&t, &ts);
+#endif
         wchar_t time_buf[16];
         wcsftime(time_buf, 16, L"[%H:%M:%S]", &ts);
 
@@ -182,16 +226,31 @@ namespace cauldron
         return 0;
     }
 
-    Log::Log(const wchar_t* filename)
-        : m_messageBuffer()
-        , m_output(filename, std::ofstream::out)
-        , m_thread(&Log::Worker, this)
-        , m_messagesLock()
-        , m_messageStartIndex(0)
-        , m_messageCount(0)
-        , m_messagesRingBuffer()
-    {
-    }
+Log::Log(const wchar_t* filename)
+    : m_messageBuffer()
+#if defined(_WIN32)
+    , m_output(filename, std::ofstream::out)
+#else
+    , m_output(WStringToString(filename), std::ofstream::out)
+#endif
+    , m_thread(&Log::Worker, this)
+    , m_messagesLock()
+    , m_messageStartIndex(0)
+    , m_messageCount(0)
+    , m_messagesRingBuffer()
+{
+#if !defined(_WIN32)
+        try
+        {
+            m_output.imbue(std::locale("C.UTF-8"));
+        }
+        catch (...)
+        {
+            m_output.imbue(std::locale::classic());
+        }
+#endif
+        m_output.exceptions(std::ios::goodbit);
+}
 
     Log::~Log()
     {
@@ -227,7 +286,7 @@ namespace cauldron
     {
         time_t now = time(0);
         
-        int body_len = _vscwprintf(text, args);
+        int body_len = GetFormattedLengthV(text, args);
 
         const wchar_t* filename_format = L" (%ls: %d)";
         int filename_len = 0;
@@ -239,7 +298,7 @@ namespace cauldron
 
         int offset = 0;
 
-        offset += vswprintf_s(msg.Data() + offset, (size_t)total_len - (size_t)offset, text, args);
+        offset += vswprintf(msg.Data() + offset, (size_t)total_len - (size_t)offset, text, args);
 
         if (filename != nullptr)
         {

@@ -30,10 +30,17 @@
 #include "render/rootsignature.h"
 
 #include <thread>
+#include <chrono>
+#if defined(_WIN32)
 #include <synchapi.h>
+#endif
 
 using namespace cauldron;
+#if defined(_WIN32)
 #define USE_BUSY_WAIT   1
+#else
+#define USE_BUSY_WAIT   0
+#endif
 
 // Used in a few places
 static uint32_t       sSeed;
@@ -63,8 +70,8 @@ void FPSLimiterRenderModule::Init(const json& initData)
     // Create FPS limiter buffer and transition it right away
     BufferDesc bufDesc = BufferDesc::Data(L"FPSLimiter_Buffer", BufferLength, 4, 0, ResourceFlags::AllowUnorderedAccess);
     m_pBuffer          = Buffer::CreateBufferResource(&bufDesc, ResourceState::CommonResource);
-    GetDevice()->ExecuteResourceTransitionImmediate(
-        1, &Barrier::Transition(m_pBuffer->GetResource(), ResourceState::CommonResource, ResourceState::UnorderedAccess));
+    Barrier bufferBarrier = Barrier::Transition(m_pBuffer->GetResource(), ResourceState::CommonResource, ResourceState::UnorderedAccess);
+    GetDevice()->ExecuteResourceTransitionImmediate(1, &bufferBarrier);
 
     // Root signature
     RootSignatureDesc signatureDesc;
@@ -99,6 +106,7 @@ void FPSLimiterRenderModule::Init(const json& initData)
     SetModuleReady(true);
 }
 
+#if defined(_WIN32)
 static void TimerSleepQPC(int64_t targetQPC)
 {
     LARGE_INTEGER currentQPC;
@@ -107,15 +115,20 @@ static void TimerSleepQPC(int64_t targetQPC)
         QueryPerformanceCounter(&currentQPC);
     } while (currentQPC.QuadPart < targetQPC);
 }
+#endif
 
 static void TimerSleep(std::chrono::steady_clock::duration duration)
 {
+#if defined(_WIN32)
     using ticks         = std::chrono::duration<int64_t, std::ratio<1, 10000000>>;
     static HANDLE timer = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     LARGE_INTEGER dueTime{};
     dueTime.QuadPart = -std::chrono::duration_cast<ticks>(duration).count();
     SetWaitableTimerEx(timer, &dueTime, 0, NULL, NULL, NULL, 0);
     WaitForSingleObject(timer, -1);
+#else
+    std::this_thread::sleep_for(duration);
+#endif
 }
 
 void FPSLimiterRenderModule::Execute(double deltaTime, cauldron::CommandList* pCmdList)
@@ -180,18 +193,18 @@ void FPSLimiterRenderModule::Execute(double deltaTime, cauldron::CommandList* pC
         const double MaxTargetFrameTimeUs = 200000.0;  // 200ms 5fps to match CPU limiter UI.
         const double MinTargetFrameTimeUs = 50.0;
 
-        if (m_FrameTimeHistoryCount >= _countof(m_FrameTimeHistory))
+        if (m_FrameTimeHistoryCount >= s_FRAME_TIME_HISTORY_SAMPLES)
         {
-            m_FrameTimeHistorySum -= m_FrameTimeHistory[m_FrameTimeHistoryCount % _countof(m_FrameTimeHistory)];
+            m_FrameTimeHistorySum -= m_FrameTimeHistory[m_FrameTimeHistoryCount % s_FRAME_TIME_HISTORY_SAMPLES];
         }
 
         m_FrameTimeHistorySum += lastFrameTimeUs;
-        m_FrameTimeHistory[m_FrameTimeHistoryCount % _countof(m_FrameTimeHistory)] = lastFrameTimeUs;
+        m_FrameTimeHistory[m_FrameTimeHistoryCount % s_FRAME_TIME_HISTORY_SAMPLES] = lastFrameTimeUs;
         m_FrameTimeHistoryCount++;
 
         uint64_t targetFrameTimeUs = 1000000 / m_TargetFPS;
 
-        double recentFrameTimeMean = double(m_FrameTimeHistorySum) / double(std::min(m_FrameTimeHistoryCount, _countof(m_FrameTimeHistory)));
+        double recentFrameTimeMean = double(m_FrameTimeHistorySum) / double(std::min(m_FrameTimeHistoryCount, static_cast<uint64_t>(s_FRAME_TIME_HISTORY_SAMPLES)));
 
         double clampedTargetFrameTimeMs = std::max(std::min(double(targetFrameTimeUs), MaxTargetFrameTimeUs), MinTargetFrameTimeUs);
         double deltaRatio               = (recentFrameTimeMean - clampedTargetFrameTimeMs) / clampedTargetFrameTimeMs;

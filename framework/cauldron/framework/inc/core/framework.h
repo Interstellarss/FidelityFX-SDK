@@ -68,8 +68,9 @@ using json = nlohmann::ordered_json;
 #include <map>
 #include <set>
 #include <unordered_set>
-#include <xstring>
+#include <string>
 #include <functional>
+#include <atomic>
 
 namespace cauldron
 {
@@ -211,9 +212,9 @@ namespace cauldron
             float                               SceneExposure = 1.f;                                            ///< Scene exposure setting at startup for content
             std::vector<ParticleSpawnerDesc>    ParticleSpawners = {};                                          ///< Particle systems to create for the sample
             
-            std::wstring                        DiffuseIBL = L"..\\media\\IBL\\mud_road_puresky_Diffuse.dds";   ///< Diffuse reflection map to use for sample
-            std::wstring                        SpecularIBL = L"..\\media\\IBL\\mud_road_puresky_Specular.dds"; ///< Specular reflection map to use for sample
-            std::wstring                        SkyMap = L"..\\media\\IBL\\mud_road_puresky_Specular.dds";      ///< Environment map used for rendering
+            std::wstring                        DiffuseIBL = L"../media/IBL/mud_road_puresky_Diffuse.dds";   ///< Diffuse reflection map to use for sample
+            std::wstring                        SpecularIBL = L"../media/IBL/mud_road_puresky_Specular.dds"; ///< Specular reflection map to use for sample
+            std::wstring                        SkyMap = L"../media/IBL/mud_road_puresky_Specular.dds";      ///< Environment map used for rendering
             float                               IBLFactor   = 0.55f;                                            ///< IBL factor to apply for sample
 
         } StartupContent;
@@ -268,6 +269,8 @@ namespace cauldron
         wchar_t* CmdLine;               ///< Command line parameters from application instance
         void*    AdditionalParams;      ///< Additional parameters from application instance
     };
+
+    class Framework;
 
     /**
      * @class FrameworkImpl
@@ -735,7 +738,7 @@ namespace cauldron
         ResolutionUpdateFunc    m_ResolutionUpdaterFn = nullptr;
         bool                    m_UpscalerEnabled = false;
         bool                    m_FrameInterpolationEnabled = false;
-        std::atomic_bool        m_Running = false;
+        std::atomic_bool        m_Running;
         FrameCaptureState       m_RenderDocCaptureState = FrameCaptureState::None;
         FrameCaptureState       m_PixCaptureState       = FrameCaptureState::None;
 

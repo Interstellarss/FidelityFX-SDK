@@ -25,6 +25,8 @@
 #include "helpers.h"
 #include "log.h"
 
+#include <cstdarg>
+#include <stdexcept>
 #include <string>
 
 #if defined(_WINDOWS)
@@ -180,10 +182,48 @@ namespace cauldron
         }
     }
 #else
-    #error CauldronCritical needs to be defined for this platform
-    #error CauldronThrowOnFail needs to be defined for this platform
-    #error CauldronError needs to be defined for this platform
-    #error CauldronWarning needs to be defined for this platform
+    inline void CauldronCritical(const wchar_t* format, ...)
+    {
+        wchar_t buffer[512];
+
+        va_list args;
+        va_start(args, format);
+        vswprintf(buffer, 512, format, args);
+        va_end(args);
+
+        Log::Write(LOGLEVEL_FATAL, buffer);
+        throw std::runtime_error(WStringToString(buffer));
+    }
+
+    inline void CauldronThrowOnFail(int32_t result)
+    {
+        if (result != 0)
+            CauldronCritical(L"Operation failed with code %d", result);
+    }
+
+    inline void CauldronError(const wchar_t* format, ...)
+    {
+        wchar_t buffer[512];
+
+        va_list args;
+        va_start(args, format);
+        vswprintf(buffer, 512, format, args);
+        va_end(args);
+
+        Log::Write(LOGLEVEL_ERROR, buffer);
+    }
+
+    inline void CauldronWarning(const wchar_t* format, ...)
+    {
+        wchar_t buffer[1024];
+
+        va_list args;
+        va_start(args, format);
+        vswprintf(buffer, 1024, format, args);
+        va_end(args);
+
+        Log::Write(LOGLEVEL_WARNING, buffer);
+    }
 #endif // defined(_WINDOWS)
 
     /// An enumeration of <c><i>Cauldron</i></c>'s assertion levels.

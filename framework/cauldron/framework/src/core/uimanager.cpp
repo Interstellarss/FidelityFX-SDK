@@ -26,8 +26,11 @@
 
 namespace cauldron
 {
+    const bool UIElement::AlwaysEnable;
+
     UIManager::UIManager()
     {
+        m_ProcessingUI.store(false);
         // Create the UI back end
         m_pUIBackEnd = UIBackend::CreateUIBackend();
     }

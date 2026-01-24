@@ -21,12 +21,16 @@
 // THE SOFTWARE.
 
 #include <FidelityFX/host/ffx_message.h>
+#include <FidelityFX/host/ffx_util.h>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>  // required for OutputDebugString()
+#else
+#include <stdio.h>    // printf / fwprintf
+#include <wchar.h>    // wide-char printing
 #endif                // #ifdef _WIN32
 
 static ffxMessageCallback s_messageCallback;
@@ -57,8 +61,19 @@ void ffxPrintMessage(uint32_t type, const wchar_t* message)
         s_messageCallback(type, message);
     }
 #else
-    FFX_UNUSED(type);
-    FFX_UNUSED(message);
+    if (s_messageCallback) {
+        s_messageCallback(type, message);
+    } else if (message) {
+        const wchar_t* prefix = L"[FFX] ";
+        if (type == FFX_MESSAGE_TYPE_ERROR) {
+            prefix = L"[FFX][ERROR] ";
+        } else if (type == FFX_MESSAGE_TYPE_WARNING) {
+            prefix = L"[FFX][WARN ] ";
+        }
+
+        fwprintf(stderr, L"%ls%ls\n", prefix, message);
+        fflush(stderr);
+    }
 #endif
     return;
 }

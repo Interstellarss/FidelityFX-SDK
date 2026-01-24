@@ -232,7 +232,8 @@ void SSSRRenderModule::CreateSSSRContext()
     m_InitializationParameters.renderSize.width = resInfo.RenderWidth;
     m_InitializationParameters.renderSize.height = resInfo.RenderHeight;
     m_InitializationParameters.normalsHistoryBufferFormat = SDKWrapper::GetFfxSurfaceFormat(m_pNormal->GetFormat());
-    CAULDRON_ASSERT(ffxSssrContextCreate(&m_Context, &m_InitializationParameters) == FFX_OK);
+    FfxErrorCode errorCode = ffxSssrContextCreate(&m_Context, &m_InitializationParameters);
+    CauldronAssert(ASSERT_CRITICAL, errorCode == FFX_OK, L"ffxSssrContextCreate failed with error %d (0x%08x)", errorCode, errorCode);
 }
 
 void SSSRRenderModule::ResetSSSRContext()
@@ -336,7 +337,13 @@ void SSSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     m_pParamSet->UpdateRootConstantBuffer(&bufferInfo, 0);
     m_pParamSet->Bind(pCmdList, m_pApplyReflectionsPipeline);
 
-    Viewport vp = { 0.f, 0.f, resInfo.fDisplayWidth(), resInfo.fDisplayHeight(), 0.f, 1.f };
+    Viewport vp;
+    vp.X = 0.f;
+    vp.Y = 0.f;
+    vp.Width = resInfo.fDisplayWidth();
+    vp.Height = resInfo.fDisplayHeight();
+    vp.MinDepth = 0.f;
+    vp.MaxDepth = 1.f;
     SetViewport(pCmdList, &vp);
     Rect scissorRect = { 0, 0, resInfo.RenderWidth, resInfo.RenderHeight };
     SetScissorRects(pCmdList, 1, &scissorRect);

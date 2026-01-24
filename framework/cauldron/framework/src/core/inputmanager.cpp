@@ -23,6 +23,8 @@
 #include "core/inputmanager.h"
 #include "misc/assert.h"
 
+#include <cstring>
+
 namespace cauldron
 {
     InputManager::InputManager()

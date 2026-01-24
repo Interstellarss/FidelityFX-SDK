@@ -28,13 +28,16 @@
 #include "render/pipelineobject.h"
 #include "render/rootsignature.h"
 #include "render/swapchain.h"
+#include "render/resourceview.h"
 #include "render/resourceviewallocator.h"
 #include "core/backend_interface.h"
 #include "core/scene.h"
 #include "misc/assert.h"
 #include "render/profiler.h"
 #include "translucency/translucencyrendermodule.h"
+#if defined(FFX_API_DX12)
 #include "core/win/framework_win.h"
+#endif
 
 #if defined(FFX_API_DX12)
 #include <ffx_api/dx12/ffx_api_dx12.hpp>
@@ -47,12 +50,51 @@
 #include "render/vk/swapchain_vk.h"
 #endif  // FFX_API_DX12
 
+#include <cstdint>
+#include <cstdlib>
 #include <functional>
 
 using namespace std;
 using namespace cauldron;
 
 void RestoreApplicationSwapChain(bool recreateSwapchain = true);
+
+namespace
+{
+    bool IsEnvEnabled(const char* name)
+    {
+        const char* value = std::getenv(name);
+        if (!value || value[0] == '\0')
+            return false;
+        return value[0] != '0';
+    }
+
+    bool TryGetEnvInt(const char* name, int32_t& outValue)
+    {
+        const char* value = std::getenv(name);
+        if (!value || value[0] == '\0')
+            return false;
+        char* end = nullptr;
+        long parsed = std::strtol(value, &end, 10);
+        if (!end || end == value)
+            return false;
+        outValue = static_cast<int32_t>(parsed);
+        return true;
+    }
+
+    bool TryGetEnvFloat(const char* name, float& outValue)
+    {
+        const char* value = std::getenv(name);
+        if (!value || value[0] == '\0')
+            return false;
+        char* end = nullptr;
+        double parsed = std::strtod(value, &end);
+        if (!end || end == value)
+            return false;
+        outValue = static_cast<float>(parsed);
+        return true;
+    }
+}
 
 void FSRRenderModule::Init(const json& initData)
 {
@@ -107,13 +149,13 @@ void FSRRenderModule::Init(const json& initData)
     {
         TextureDesc desc = m_pColorTarget->GetDesc();
         desc.Name        = L"UpscaleIntermediateTarget";
-        desc.Width       = m_pColorTarget->GetDesc().Width;
-        desc.Height      = m_pColorTarget->GetDesc().Height;
+        desc.Width       = resInfo.RenderWidth;
+        desc.Height      = resInfo.RenderHeight;
 
         m_pTempTexture = GetDynamicResourcePool()->CreateRenderTexture(
             &desc, [](TextureDesc& desc, uint32_t displayWidth, uint32_t displayHeight, uint32_t renderingWidth, uint32_t renderingHeight) {
-                desc.Width  = displayWidth;
-                desc.Height = displayHeight;
+                desc.Width  = renderingWidth;
+                desc.Height = renderingHeight;
             });
         CauldronAssert(ASSERT_CRITICAL, m_pTempTexture, L"Couldn't create intermediate texture.");
     }
@@ -167,6 +209,14 @@ void FSRRenderModule::Init(const json& initData)
 
     m_FrameInterpolationAvailable = pPresentQueue->queue != VK_NULL_HANDLE && pImageAcquireQueue->queue != VK_NULL_HANDLE;
     m_AsyncComputeAvailable       = m_FrameInterpolationAvailable && pAsyncComputeQueue->queue != VK_NULL_HANDLE;
+    const bool enableFrameInterpolation = IsEnvEnabled("FFX_ENABLE_FRAME_INTERPOLATION");
+    const bool disableFrameInterpolation = IsEnvEnabled("FFX_DISABLE_FRAME_INTERPOLATION");
+    if (disableFrameInterpolation || !enableFrameInterpolation)
+    {
+        m_FrameInterpolationAvailable = false;
+        m_AsyncComputeAvailable = false;
+        CauldronWarning(L"Frame interpolation disabled on Linux. Set FFX_ENABLE_FRAME_INTERPOLATION=1 to override.");
+    }
 
 #endif  // defined(FFX_API_DX12)
 
@@ -306,6 +356,12 @@ void FSRRenderModule::Init(const json& initData)
 
     // Start disabled as this will be enabled externally
     cauldron::RenderModule::SetModuleEnabled(false);
+
+    if (IsEnvEnabled("CAULDRON_DEBUG_FSR_CHECKER"))
+    {
+        m_GlobalDebugCheckerMode = FSRDebugCheckerMode::EnabledWithMessageCallback;
+        CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_CHECKER=1");
+    }
 
     {
         // Register upscale method picker picker
@@ -452,6 +508,20 @@ void FSRRenderModule::InitUI(UISection* pUISection)
     versionQuery.versionIds = m_FsrVersionIds.data();
     versionQuery.versionNames = versionNames.data();
     ffxQuery(nullptr, &versionQuery.header);
+
+    if (IsEnvEnabled("CAULDRON_DEBUG_FSR_LIST_VERSIONS"))
+    {
+        for (uint64_t i = 0; i < versionCount; ++i)
+            CauldronWarning(L"FSRRenderModule: version[%llu]=0x%016llx", i, m_FsrVersionIds[i]);
+    }
+
+    int32_t forcedVersionIndex = -1;
+    if (TryGetEnvInt("CAULDRON_DEBUG_FSR_VERSION_INDEX", forcedVersionIndex) && forcedVersionIndex >= 0 && static_cast<uint64_t>(forcedVersionIndex) < versionCount)
+    {
+        m_overrideVersion = true;
+        m_FsrVersionIndex = forcedVersionIndex;
+        CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_VERSION_INDEX=%d", forcedVersionIndex);
+    }
 
     m_UIElements.emplace_back(pUISection->RegisterUIElement<UICombo>(
         "FSR Version", (int32_t&)m_FsrVersionIndex, std::move(versionNames), m_overrideVersion, [this](int32_t, int32_t) { m_NeedReInit = true; }, false));
@@ -601,7 +671,8 @@ void FSRRenderModule::InitUI(UISection* pUISection)
             }
             else if (m_waitCallbackMode == 1)
             {
-                m_swapchainKeyValueConfig.ptr = waitCallback;
+                auto callbackBits = reinterpret_cast<std::uintptr_t>(waitCallback);
+                m_swapchainKeyValueConfig.ptr = reinterpret_cast<void*>(callbackBits);
             }
             ffx::Configure(m_SwapChainContext, m_swapchainKeyValueConfig);
 
@@ -858,9 +929,11 @@ ffxReturnCode_t FSRRenderModule::UiCompositionCallback(ffxCallbackDescFrameGener
                                                     ResourceFlags::AllowRenderTarget);
     m_pRTResourceView->BindTextureResource(pRTResource, rtResourceDesc, ResourceViewType::RTV, ViewDimension::Texture2D, 0, 1, 0);
     
-    m_pUIRenderModule->ExecuteAsync(pCmdList, &m_pRTResourceView->GetViewInfo(0));
+    const ResourceViewInfo rtViewInfo = m_pRTResourceView->GetViewInfo(0);
+    m_pUIRenderModule->ExecuteAsync(pCmdList, &rtViewInfo);
 
-    ResourceBarrier(pCmdList, 1, &Barrier::Transition(pRTResource, ResourceState::RenderTargetResource, rtResourceState));
+    Barrier rtBarrier = Barrier::Transition(pRTResource, ResourceState::RenderTargetResource, rtResourceState);
+    ResourceBarrier(pCmdList, 1, &rtBarrier);
 
     // Clean up wrapped resources for the frame
     delete pBBResource;
@@ -902,7 +975,21 @@ void FSRRenderModule::UpdateFSRContext(bool enabled)
                 createFsr.flags |= FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_DEPTH_INFINITE;
             }
             createFsr.flags |= FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE;
-            createFsr.fpMessage = nullptr;
+            createFsr.fpMessage = &FSRRenderModule::FfxMsgCallback;
+
+            static bool s_loggedFlags = false;
+            if (IsEnvEnabled("CAULDRON_DEBUG_FSR_DISABLE_AUTO_EXPOSURE"))
+                createFsr.flags &= ~FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
+            if (IsEnvEnabled("CAULDRON_DEBUG_FSR_DISABLE_HDR"))
+                createFsr.flags &= ~FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE;
+            if (!s_loggedFlags)
+            {
+                if (IsEnvEnabled("CAULDRON_DEBUG_FSR_DISABLE_AUTO_EXPOSURE"))
+                    CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_DISABLE_AUTO_EXPOSURE=1");
+                if (IsEnvEnabled("CAULDRON_DEBUG_FSR_DISABLE_HDR"))
+                    CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_DISABLE_HDR=1");
+                s_loggedFlags = true;
+            }
 
             if (m_GlobalDebugCheckerMode != FSRDebugCheckerMode::Disabled)
             {
@@ -924,6 +1011,37 @@ void FSRRenderModule::UpdateFSRContext(bool enabled)
                     retCode = ffx::CreateContext(m_UpscalingContext, nullptr, createFsr, backendDesc);
                 }
 
+                if (retCode != ffx::ReturnCode::Ok && !m_overrideVersion && !m_FsrVersionIds.empty())
+                {
+                    uint32_t bestMajor = 0xFFFFFFFFu;
+                    uint32_t bestIndex = 0;
+                    uint64_t bestVersionId = 0;
+                    for (uint32_t i = 0; i < m_FsrVersionIds.size(); ++i)
+                    {
+                        uint32_t version = static_cast<uint32_t>(m_FsrVersionIds[i] & 0xFFFFFFFFu);
+                        uint32_t major = version >> 22;
+                        if (major < bestMajor)
+                        {
+                            bestMajor = major;
+                            bestIndex = i;
+                            bestVersionId = m_FsrVersionIds[i];
+                        }
+                    }
+
+                    if (bestMajor != 0xFFFFFFFFu)
+                    {
+                        versionOverride.versionId = bestVersionId;
+                        CauldronWarning(L"Upscaler context creation failed with %u. Retrying with version override 0x%016llx.",
+                                        static_cast<uint32_t>(retCode), bestVersionId);
+                        retCode = ffx::CreateContext(m_UpscalingContext, nullptr, createFsr, backendDesc, versionOverride);
+                        if (retCode == ffx::ReturnCode::Ok)
+                        {
+                            m_overrideVersion = true;
+                            m_FsrVersionIndex = bestIndex;
+                        }
+                    }
+                }
+
                 CauldronAssert(ASSERT_CRITICAL, retCode == ffx::ReturnCode::Ok, L"Couldn't create the ffxapi upscaling context: %d", (uint32_t)retCode);
             }
             
@@ -935,7 +1053,7 @@ void FSRRenderModule::UpdateFSRContext(bool enabled)
             m_currentUpscaleContextVersionId = getVersion.versionId;
             m_currentUpscaleContextVersionName = getVersion.versionName;
 
-            CAUDRON_LOG_INFO(L"Upscaler Context versionid 0x%016llx, %S", m_currentUpscaleContextVersionId, m_currentUpscaleContextVersionName);
+            CAUDRON_LOG_INFO(L"Upscaler Context versionid 0x%016llx", m_currentUpscaleContextVersionId);
 
             for (uint32_t i = 0; i < m_FsrVersionIds.size(); i++)
             {
@@ -1214,30 +1332,152 @@ void FSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     GPUResource* pSwapchainBackbuffer = GetFramework()->GetSwapChain()->GetBackBufferRT()->GetCurrentResource();
     FfxApiResource backbuffer            = SDKWrapper::ffxGetResourceApi(pSwapchainBackbuffer, FFX_API_RESOURCE_STATE_PRESENT);
 
-    // copy input source to temp so that the input and output texture of the upscalers is different 
+    if (IsEnvEnabled("CAULDRON_DEBUG_FSR_LOG_SIZES"))
     {
-        std::vector<Barrier> barriers;
-        barriers.push_back(Barrier::Transition(
-            m_pTempTexture->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopyDest));
-        barriers.push_back(Barrier::Transition(
-            m_pColorTarget->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopySource));
-        ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+        static bool s_loggedSizes = false;
+        if (!s_loggedSizes)
+        {
+            CauldronWarning(L"FSRRenderModule: render=%ux%u upscale=%ux%u display=%ux%u color=%ux%u temp=%ux%u depth=%ux%u motion=%ux%u reactive=%ux%u comp=%ux%u",
+                            resInfo.RenderWidth, resInfo.RenderHeight,
+                            resInfo.UpscaleWidth, resInfo.UpscaleHeight,
+                            resInfo.DisplayWidth, resInfo.DisplayHeight,
+                            m_pColorTarget->GetDesc().Width, m_pColorTarget->GetDesc().Height,
+                            m_pTempTexture->GetDesc().Width, m_pTempTexture->GetDesc().Height,
+                            m_pDepthTarget->GetDesc().Width, m_pDepthTarget->GetDesc().Height,
+                            m_pMotionVectors->GetDesc().Width, m_pMotionVectors->GetDesc().Height,
+                            m_pReactiveMask->GetDesc().Width, m_pReactiveMask->GetDesc().Height,
+                            m_pCompositionMask->GetDesc().Width, m_pCompositionMask->GetDesc().Height);
+            s_loggedSizes = true;
+        }
     }
 
+    if (IsEnvEnabled("CAULDRON_DEBUG_FSR_FORCE_INPUT"))
     {
-        GPUScopedProfileCapture sampleMarker(pCmdList, L"CopyToTemp");
+        static bool s_loggedForce = false;
+        if (!s_loggedForce)
+        {
+            CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_FORCE_INPUT=1");
+            s_loggedForce = true;
+        }
 
-        TextureCopyDesc desc(m_pColorTarget->GetResource(), m_pTempTexture->GetResource());
-        CopyTextureRegion(pCmdList, &desc);
+        static ResourceView* s_tempUavGpu = nullptr;
+        static ResourceView* s_tempUavCpu = nullptr;
+        if (!s_tempUavGpu || !s_tempUavCpu)
+        {
+            auto* allocator = GetResourceViewAllocator();
+            allocator->AllocateGPUResourceViews(&s_tempUavGpu, 1);
+            allocator->AllocateCPUResourceViews(&s_tempUavCpu, 1);
+            s_tempUavGpu->BindTextureResource(m_pTempTexture->GetResource(),
+                                              m_pTempTexture->GetDesc(),
+                                              ResourceViewType::TextureUAV,
+                                              ViewDimension::Texture2D,
+                                              0,
+                                              -1,
+                                              0,
+                                              0);
+            s_tempUavCpu->BindTextureResource(m_pTempTexture->GetResource(),
+                                              m_pTempTexture->GetDesc(),
+                                              ResourceViewType::TextureUAV,
+                                              ViewDimension::Texture2D,
+                                              0,
+                                              -1,
+                                              0,
+                                              0);
+        }
+
+        const GPUResource* tempResource = m_pTempTexture->GetResource();
+        ResourceState tempState = tempResource->GetCurrentResourceState();
+        if (tempState != ResourceState::UnorderedAccess)
+        {
+            Barrier toUav = Barrier::Transition(tempResource, tempState, ResourceState::UnorderedAccess);
+            ResourceBarrier(pCmdList, 1, &toUav);
+        }
+
+        float debugColor[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+        ResourceViewInfo gpuView = s_tempUavGpu->GetViewInfo();
+        ResourceViewInfo cpuView = s_tempUavCpu->GetViewInfo();
+        ClearUAVFloat(pCmdList, tempResource, &gpuView, &cpuView, debugColor);
+
+        Barrier toRead = Barrier::Transition(tempResource,
+                                             ResourceState::UnorderedAccess,
+                                             ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource);
+        ResourceBarrier(pCmdList, 1, &toRead);
+    }
+    else
+    {
+        // copy input source to temp so that the input and output texture of the upscalers is different 
+        {
+            std::vector<Barrier> barriers;
+            barriers.push_back(Barrier::Transition(
+                m_pTempTexture->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopyDest));
+            barriers.push_back(Barrier::Transition(
+                m_pColorTarget->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopySource));
+            ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+        }
+
+        {
+            GPUScopedProfileCapture sampleMarker(pCmdList, L"CopyToTemp");
+
+            TextureCopyDesc desc(m_pColorTarget->GetResource(), m_pTempTexture->GetResource());
+            CopyTextureRegion(pCmdList, &desc);
+        }
+
+        {
+            std::vector<Barrier> barriers;
+            barriers.push_back(Barrier::Transition(
+                m_pTempTexture->GetResource(), ResourceState::CopyDest, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
+            barriers.push_back(Barrier::Transition(
+                m_pColorTarget->GetResource(), ResourceState::CopySource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
+            ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+        }
     }
 
+    if (IsEnvEnabled("CAULDRON_DEBUG_FSR_COPY_INPUT"))
     {
-        std::vector<Barrier> barriers;
-        barriers.push_back(Barrier::Transition(
-            m_pTempTexture->GetResource(), ResourceState::CopyDest, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
-        barriers.push_back(Barrier::Transition(
-            m_pColorTarget->GetResource(), ResourceState::CopySource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
-        ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+        static bool s_loggedCopyInput = false;
+        if (!s_loggedCopyInput)
+        {
+            CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_COPY_INPUT=1");
+            s_loggedCopyInput = true;
+        }
+
+        // Copy temp (render-res) into HDR11Color to verify input content.
+        {
+            std::vector<Barrier> barriers;
+            barriers.push_back(Barrier::Transition(
+                m_pTempTexture->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopySource));
+            barriers.push_back(Barrier::Transition(
+                m_pColorTarget->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopyDest));
+            ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+        }
+
+        {
+            GPUScopedProfileCapture sampleMarker(pCmdList, L"CopyTempToHDR");
+            TextureCopyDesc desc(m_pTempTexture->GetResource(), m_pColorTarget->GetResource());
+            CopyTextureRegion(pCmdList, &desc);
+        }
+
+        {
+            std::vector<Barrier> barriers;
+            barriers.push_back(Barrier::Transition(
+                m_pTempTexture->GetResource(), ResourceState::CopySource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
+            barriers.push_back(Barrier::Transition(
+                m_pColorTarget->GetResource(), ResourceState::CopyDest, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
+            ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+        }
+
+        return;
+    }
+
+    if (IsEnvEnabled("CAULDRON_DEBUG_FSR_SKIP_DISPATCH"))
+    {
+        static bool s_loggedSkip = false;
+        if (!s_loggedSkip)
+        {
+            CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_SKIP_DISPATCH=1");
+            s_loggedSkip = true;
+        }
+        return;
     }
 
     // Note, inverted depth and display mode are currently handled statically for the run of the sample.
@@ -1252,6 +1492,17 @@ void FSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
     if (m_UpscaleMethod == Upscaler_FSRAPI)
     {
+        // Ensure output is in UAV state for FSR to write.
+        {
+            const GPUResource* colorResource = m_pColorTarget->GetResource();
+            ResourceState currentState = colorResource->GetCurrentResourceState();
+            if (currentState != ResourceState::UnorderedAccess)
+            {
+                Barrier outputToUav = Barrier::Transition(colorResource, currentState, ResourceState::UnorderedAccess);
+                ResourceBarrier(pCmdList, 1, &outputToUav);
+            }
+        }
+
         // FFXAPI
         // All cauldron resources come into a render module in a generic read state (ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource)
         ffx::DispatchDescUpscale dispatchUpscale{};
@@ -1265,7 +1516,9 @@ void FSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
         dispatchUpscale.depth = SDKWrapper::ffxGetResourceApi(m_pDepthTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(m_pMotionVectors->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.exposure = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        dispatchUpscale.output = SDKWrapper::ffxGetResourceApi(m_pColorTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        dispatchUpscale.output = SDKWrapper::ffxGetResourceApi(m_pColorTarget->GetResource(),
+                                                              FFX_API_RESOURCE_STATE_UNORDERED_ACCESS,
+                                                              FFX_API_RESOURCE_USAGE_UAV);
 
         if (m_MaskMode != FSRMaskMode::Disabled)
         {
@@ -1292,6 +1545,16 @@ void FSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
         dispatchUpscale.motionVectorScale.x = resInfo.fRenderWidth();
         dispatchUpscale.motionVectorScale.y = resInfo.fRenderHeight();
         dispatchUpscale.reset = m_ResetUpscale || GetScene()->GetCurrentCamera()->WasCameraReset();
+        if (IsEnvEnabled("CAULDRON_DEBUG_FSR_FORCE_RESET"))
+        {
+            dispatchUpscale.reset = true;
+            static bool s_loggedReset = false;
+            if (!s_loggedReset)
+            {
+                CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_FORCE_RESET=1");
+                s_loggedReset = true;
+            }
+        }
         dispatchUpscale.enableSharpening = m_RCASSharpen;
         dispatchUpscale.sharpness = m_Sharpness;
 
@@ -1299,6 +1562,17 @@ void FSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
         dispatchUpscale.frameTimeDelta = static_cast<float>(deltaTime * 1000.f);
 
         dispatchUpscale.preExposure = GetScene()->GetSceneExposure();
+        float forcedPreExposure = 0.0f;
+        if (TryGetEnvFloat("CAULDRON_DEBUG_FSR_PREEXPOSURE", forcedPreExposure))
+        {
+            dispatchUpscale.preExposure = forcedPreExposure;
+            static bool s_loggedPreExposure = false;
+            if (!s_loggedPreExposure)
+            {
+                CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_PREEXPOSURE=%f", forcedPreExposure);
+                s_loggedPreExposure = true;
+            }
+        }
         dispatchUpscale.renderSize.width = resInfo.RenderWidth;
         dispatchUpscale.renderSize.height = resInfo.RenderHeight;
         dispatchUpscale.upscaleSize.width = resInfo.UpscaleWidth;
@@ -1320,9 +1594,68 @@ void FSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
         dispatchUpscale.flags = 0;
         dispatchUpscale.flags |= m_DrawUpscalerDebugView ? FFX_UPSCALE_FLAG_DRAW_DEBUG_VIEW : 0;
+        if (IsEnvEnabled("CAULDRON_DEBUG_FSR_FORCE_DEBUG_VIEW"))
+        {
+            dispatchUpscale.flags |= FFX_UPSCALE_FLAG_DRAW_DEBUG_VIEW;
+            static bool s_loggedDebugView = false;
+            if (!s_loggedDebugView)
+            {
+                CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_FORCE_DEBUG_VIEW=1");
+                s_loggedDebugView = true;
+            }
+        }
 
         ffx::ReturnCode retCode = ffx::Dispatch(m_UpscalingContext, dispatchUpscale);
-        CauldronAssert(ASSERT_CRITICAL, !!retCode, L"Dispatching FSR upscaling failed: %d", (uint32_t)retCode);
+        if (retCode != ffx::ReturnCode::Ok)
+            CauldronWarning(L"FSRRenderModule: ffx::Dispatch(Upscale) failed: %u", (uint32_t)retCode);
+        CauldronAssert(ASSERT_CRITICAL, retCode == ffx::ReturnCode::Ok, L"Dispatching FSR upscaling failed: %d", (uint32_t)retCode);
+
+        // Ensure HDR11Color is readable for swapchain after the dispatch.
+        const GPUResource* colorResource = m_pColorTarget->GetResource();
+        ResourceState currentState = colorResource->GetCurrentResourceState();
+        ResourceState readState = ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource;
+        if (currentState != readState)
+        {
+            Barrier outputBarrier = Barrier::Transition(colorResource, currentState, readState);
+            ResourceBarrier(pCmdList, 1, &outputBarrier);
+        }
+
+        if (IsEnvEnabled("CAULDRON_DEBUG_FSR_FORCE_HDR"))
+        {
+            static bool s_loggedForce = false;
+            if (!s_loggedForce)
+            {
+                CauldronWarning(L"FSRRenderModule: CAULDRON_DEBUG_FSR_FORCE_HDR=1");
+                s_loggedForce = true;
+            }
+
+            static ResourceView* s_debugUavGpu = nullptr;
+            static ResourceView* s_debugUavCpu = nullptr;
+            if (!s_debugUavGpu || !s_debugUavCpu)
+            {
+                auto* allocator = GetResourceViewAllocator();
+                allocator->AllocateGPUResourceViews(&s_debugUavGpu, 1);
+                allocator->AllocateCPUResourceViews(&s_debugUavCpu, 1);
+                s_debugUavGpu->BindTextureResource(colorResource, m_pColorTarget->GetDesc(), ResourceViewType::TextureUAV, ViewDimension::Texture2D, 0, -1, 0, 0);
+                s_debugUavCpu->BindTextureResource(colorResource, m_pColorTarget->GetDesc(), ResourceViewType::TextureUAV, ViewDimension::Texture2D, 0, -1, 0, 0);
+            }
+
+            ResourceState uavState = ResourceState::UnorderedAccess;
+            currentState = colorResource->GetCurrentResourceState();
+            if (currentState != uavState)
+            {
+                Barrier toUav = Barrier::Transition(colorResource, currentState, uavState);
+                ResourceBarrier(pCmdList, 1, &toUav);
+            }
+
+            float debugColor[4] = {0.0f, 0.4f, 1.0f, 1.0f};
+            ResourceViewInfo gpuView = s_debugUavGpu->GetViewInfo();
+            ResourceViewInfo cpuView = s_debugUavCpu->GetViewInfo();
+            ClearUAVFloat(pCmdList, colorResource, &gpuView, &cpuView, debugColor);
+
+            Barrier backToRead = Barrier::Transition(colorResource, uavState, readState);
+            ResourceBarrier(pCmdList, 1, &backToRead);
+        }
     }
 
     if (m_FrameInterpolationAvailable)
@@ -1417,17 +1750,25 @@ void FSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
             retCode = ffx::Configure(m_FrameGenContext, m_FrameGenerationConfig);
         }
 
-        CauldronAssert(ASSERT_CRITICAL, !!retCode, L"Configuring FSR FG failed: %d", (uint32_t)retCode);
+        if (retCode != ffx::ReturnCode::Ok)
+            CauldronWarning(L"FSRRenderModule: ffx::Configure(FG) failed: %u", (uint32_t)retCode);
+        CauldronAssert(ASSERT_CRITICAL, retCode == ffx::ReturnCode::Ok, L"Configuring FSR FG failed: %d", (uint32_t)retCode);
 
         ffx::DispatchDescFrameGenerationPrepareCameraInfo cameraConfig{};
-        memcpy(cameraConfig.cameraPosition, &pCamera->GetCameraPos(), 3 * sizeof(float));
-        memcpy(cameraConfig.cameraUp, &pCamera->GetCameraUp(), 3 * sizeof(float));
-        memcpy(cameraConfig.cameraRight, &pCamera->GetCameraRight(), 3 * sizeof(float));
-        memcpy(cameraConfig.cameraForward, &(pCamera->GetDirection().getXYZ()), 3 * sizeof(float));
+        const Vec3 cameraPos = pCamera->GetCameraPos();
+        const Vec3 cameraUp = pCamera->GetCameraUp();
+        const Vec3 cameraRight = pCamera->GetCameraRight();
+        const Vec3 cameraForward = pCamera->GetDirection().getXYZ();
+        memcpy(cameraConfig.cameraPosition, &cameraPos, 3 * sizeof(float));
+        memcpy(cameraConfig.cameraUp, &cameraUp, 3 * sizeof(float));
+        memcpy(cameraConfig.cameraRight, &cameraRight, 3 * sizeof(float));
+        memcpy(cameraConfig.cameraForward, &cameraForward, 3 * sizeof(float));
 
         retCode = ffx::Dispatch(m_FrameGenContext, dispatchFgPrep, cameraConfig);
 
-        CauldronAssert(ASSERT_CRITICAL, !!retCode, L"Dispatching FSR FG (upscaling data) failed: %d", (uint32_t)retCode);
+        if (retCode != ffx::ReturnCode::Ok)
+            CauldronWarning(L"FSRRenderModule: ffx::Dispatch(FG prepare) failed: %u", (uint32_t)retCode);
+        CauldronAssert(ASSERT_CRITICAL, retCode == ffx::ReturnCode::Ok, L"Dispatching FSR FG (upscaling data) failed: %d", (uint32_t)retCode);
 
         FfxApiResource uiColor =
             (s_uiRenderMode == 1) ? SDKWrapper::ffxGetResourceApi(m_pUiTexture[m_curUiTextureIndex]->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ)
@@ -1483,7 +1824,9 @@ void FSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
         ffx::ReturnCode retCode = ffx::Dispatch(m_FrameGenContext, dispatchFg);
         
-        CauldronAssert(ASSERT_CRITICAL, !!retCode, L"Dispatching Frame Generation failed: %d", (uint32_t)retCode);
+        if (retCode != ffx::ReturnCode::Ok)
+            CauldronWarning(L"FSRRenderModule: ffx::Dispatch(FG) failed: %u", (uint32_t)retCode);
+        CauldronAssert(ASSERT_CRITICAL, retCode == ffx::ReturnCode::Ok, L"Dispatching Frame Generation failed: %d", (uint32_t)retCode);
     }
 
     m_FrameID += uint64_t(1 + m_SimulatePresentSkip);
@@ -1510,8 +1853,10 @@ void FSRRenderModule::PreTransCallback(double deltaTime, CommandList* pCmdList)
 
     // We need to clear the reactive and composition masks before any translucencies are rendered into them
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    ClearRenderTarget(pCmdList, &m_RasterViews[0]->GetResourceView(), clearColor);
-    ClearRenderTarget(pCmdList, &m_RasterViews[1]->GetResourceView(), clearColor);
+    const ResourceViewInfo reactiveView = m_RasterViews[0]->GetResourceView();
+    const ResourceViewInfo compositionView = m_RasterViews[1]->GetResourceView();
+    ClearRenderTarget(pCmdList, &reactiveView, clearColor);
+    ClearRenderTarget(pCmdList, &compositionView, clearColor);
 
     barriers.clear();
     barriers.push_back(Barrier::Transition(m_pReactiveMask->GetResource(), ResourceState::RenderTargetResource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
@@ -1559,7 +1904,9 @@ void FSRRenderModule::PostTransCallback(double deltaTime, CommandList* pCmdList)
 #endif  // defined(FFX_API_DX12)
     dispatchDesc.colorOpaqueOnly = SDKWrapper::ffxGetResourceApi(m_pOpaqueTexture->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
     dispatchDesc.colorPreUpscale = SDKWrapper::ffxGetResourceApi(m_pColorTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-    dispatchDesc.outReactive = SDKWrapper::ffxGetResourceApi(m_pReactiveMask->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+    dispatchDesc.outReactive = SDKWrapper::ffxGetResourceApi(m_pReactiveMask->GetResource(),
+                                                            FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ,
+                                                            FFX_API_RESOURCE_USAGE_UAV);
 
     const ResolutionInfo& resInfo = GetFramework()->GetResolutionInfo();
     dispatchDesc.renderSize.width = resInfo.RenderWidth;

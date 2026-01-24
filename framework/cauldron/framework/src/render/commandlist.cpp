@@ -36,9 +36,9 @@ namespace cauldron
 
     void CommandList::BeginVRSRendering(const VariableShadingRateInfo* pVrsInfo)
     {
-        if (pVrsInfo->VariableShadingMode > VariableShadingMode::VariableShadingMode_None)
+        if (pVrsInfo->ShadingMode > VariableShadingMode::VariableShadingMode_None)
         {
-            if (pVrsInfo->VariableShadingMode > VariableShadingMode::VariableShadingMode_Per_Draw &&
+            if (pVrsInfo->ShadingMode > VariableShadingMode::VariableShadingMode_Per_Draw &&
                 pVrsInfo->Combiners[1] != ShadingRateCombiner::ShadingRateCombiner_Passthrough)
             {
                 const GPUResource* vrsImage = pVrsInfo->pShadingRateImage->GetResource();
@@ -63,9 +63,9 @@ namespace cauldron
 
     void CommandList::EndVRSRendering(const VariableShadingRateInfo* pVrsInfo)
     {
-        if (pVrsInfo->VariableShadingMode > VariableShadingMode::VariableShadingMode_None)
+        if (pVrsInfo->ShadingMode > VariableShadingMode::VariableShadingMode_None)
         {
-            if (pVrsInfo->VariableShadingMode > VariableShadingMode::VariableShadingMode_Per_Draw &&
+            if (pVrsInfo->ShadingMode > VariableShadingMode::VariableShadingMode_Per_Draw &&
                 pVrsInfo->Combiners[1] != ShadingRateCombiner::ShadingRateCombiner_Passthrough)
             {
                 Barrier barrier = Barrier::Transition(pVrsInfo->pShadingRateImage->GetResource(),

@@ -28,6 +28,8 @@
 #include "json/json.h"
 using json = nlohmann::ordered_json;
 
+#include <atomic>
+
 namespace cauldron
 {
     class CommandList;
@@ -112,8 +114,8 @@ namespace cauldron
         NO_COPY(RenderModule)
         NO_MOVE(RenderModule)
 
-        std::atomic_bool    m_ModuleReady   = false;
-        std::atomic_bool    m_ModuleEnabled = true;
+        std::atomic_bool    m_ModuleReady;
+        std::atomic_bool    m_ModuleEnabled;
 
     protected:
         RenderModule() = default;

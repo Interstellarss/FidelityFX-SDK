@@ -30,9 +30,19 @@
 
 #define TARGET(v)    CONCAT(SV_Target, v)
 
-#define MAX_TEXTURES_COUNT            1000
-#define MAX_SAMPLERS_COUNT            20
-#define MAX_SHADOW_MAP_TEXTURES_COUNT 15
+#ifndef MAX_TEXTURES_COUNT
+    #define MAX_TEXTURES_COUNT 1000
+#endif
+#ifndef MAX_SAMPLERS_COUNT
+    #define MAX_SAMPLERS_COUNT 20
+#endif
+#ifndef MAX_SHADOW_MAP_TEXTURES_COUNT
+    #define MAX_SHADOW_MAP_TEXTURES_COUNT 15
+#endif
+
+#ifndef SURFACE_RENDERCOMMON_HAS_TEXTURES
+    #define SURFACE_RENDERCOMMON_HAS_TEXTURES 0
+#endif
 
 // Vertex Skinning
 #ifndef MAX_NUM_BONES
@@ -130,6 +140,14 @@ struct TextureIndices
 
 #ifndef __cplusplus
 #include "rasterlightfunctions.hlsl"
+
+#if defined(FFX_DXC)
+    #define FFX_RESOURCE_PARAMS
+    #define FFX_RESOURCE_ARGS
+#else
+    #define FFX_RESOURCE_PARAMS , Texture2D AllTextures[MAX_TEXTURES_COUNT], SamplerState AllSamplers[MAX_SAMPLERS_COUNT]
+    #define FFX_RESOURCE_ARGS , AllTextures, AllSamplers
+#endif
 
 //--------------------------------------------------------------------------------------
 //  Remove texture references if the material doesn't have texture coordinates
@@ -232,7 +250,9 @@ struct VS_SURFACE_OUTPUT
 // Fetch helpers
 //////////////////////////////////////////////////////////////////////////
 
-float4 GetAlbedoTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textures, Texture2D AllTextures[], SamplerState AllSamplers[], float MipLODBias)
+#if SURFACE_RENDERCOMMON_HAS_TEXTURES
+
+float4 GetAlbedoTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textures FFX_RESOURCE_PARAMS, float MipLODBias)
 {
     float2 uv = float2(0.0, 0.0);
 #ifdef ID_albedoTexCoord
@@ -247,13 +267,13 @@ float4 GetAlbedoTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textures, Textur
 }
 
 
-float4 GetBaseColorAlpha(VS_SURFACE_OUTPUT Input, MaterialInformation MaterialInfo, TextureIndices Textures, Texture2D AllTextures[], SamplerState AllSamplers[], float MipLODBias)
+float4 GetBaseColorAlpha(VS_SURFACE_OUTPUT Input, MaterialInformation MaterialInfo, TextureIndices Textures FFX_RESOURCE_PARAMS, float MipLODBias)
 {
     // Initialize the color using the texture if present
     float4 BaseColorAlpha = float4(1.0, 1.0, 1.0, 1.0);
 
 #ifdef ID_albedoTexture
-    BaseColorAlpha = GetAlbedoTexture(Input, Textures, AllTextures, AllSamplers, MipLODBias);
+    BaseColorAlpha = GetAlbedoTexture(Input, Textures FFX_RESOURCE_ARGS, MipLODBias);
 #endif  // ID_albedoTexture
 
     BaseColorAlpha *= MaterialInfo.AlbedoFactor;
@@ -269,7 +289,7 @@ float4 GetBaseColorAlpha(VS_SURFACE_OUTPUT Input, MaterialInformation MaterialIn
 }
 
 
-float4 GetMetallicRoughnessTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textures, Texture2D AllTextures[], SamplerState AllSamplers[], float MipLODBias)
+float4 GetMetallicRoughnessTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textures FFX_RESOURCE_PARAMS, float MipLODBias)
 {
     float2 uv = float2(0.0, 0.0);
 #ifdef ID_metallicRoughnessTexCoord
@@ -283,7 +303,7 @@ float4 GetMetallicRoughnessTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textu
 #endif
 }
 
-float4 GetSpecularGlossinessTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textures, Texture2D AllTextures[], SamplerState AllSamplers[], float MipLODBias)
+float4 GetSpecularGlossinessTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textures FFX_RESOURCE_PARAMS, float MipLODBias)
 {
     float2 uv = float2(0.0, 0.0);
 #ifdef ID_specularGlossinessTexCoord
@@ -297,20 +317,20 @@ float4 GetSpecularGlossinessTexture(VS_SURFACE_OUTPUT Input, TextureIndices Text
 #endif
 }
 
-float3 GetAoRoughnessMetallic(VS_SURFACE_OUTPUT Input, MaterialInformation MaterialInfo, TextureIndices Textures, Texture2D AllTextures[], SamplerState AllSamplers[], float MipLODBias, float3 BaseColor)
+float3 GetAoRoughnessMetallic(VS_SURFACE_OUTPUT Input, MaterialInformation MaterialInfo, TextureIndices Textures FFX_RESOURCE_PARAMS, float MipLODBias, float3 BaseColor)
 {
     float4 AoRoughnessMetallic = float4(1.0, 1.0, 1.0, 1.0);
 
 #if defined(MATERIAL_METALLICROUGHNESS)
 
     // AO is stored in the 'r' channel, roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
-    AoRoughnessMetallic = GetMetallicRoughnessTexture(Input, Textures, AllTextures, AllSamplers, MipLODBias);
+    AoRoughnessMetallic = GetMetallicRoughnessTexture(Input, Textures FFX_RESOURCE_ARGS, MipLODBias);
     AoRoughnessMetallic.g *= MaterialInfo.PBRParams.y;  // Material Roughness
     AoRoughnessMetallic.b *= MaterialInfo.PBRParams.x;  // Material Metallic
 
 #elif defined(MATERIAL_SPECULARGLOSSINESS) // ! MATERIAL_METALLICROUGHNESS
 
-    float4 SpecGloss = GetSpecularGlossinessTexture(Input, Textures, AllTextures, AllSamplers, MipLODBias);
+    float4 SpecGloss = GetSpecularGlossinessTexture(Input, Textures FFX_RESOURCE_ARGS, MipLODBias);
     AoRoughnessMetallic.g = (1.0 - SpecGloss.a * MaterialInfo.PBRParams.w);  // Material Glossiness to roughness
 
     float3 F0 = SpecGloss.rgb * MaterialInfo.PBRParams.xyz;      // Material Specular
@@ -325,16 +345,14 @@ void GetPBRParams(VS_SURFACE_OUTPUT   Input,
                   MaterialInformation MaterialInfo,
                   out float4          AlbedoAlphaOut,
                   out float3          AoRoughnessMetallicOut,
-                  TextureIndices      Textures,
-                  Texture2D           AllTextures[],
-                  SamplerState        AllSamplers[],
+                  TextureIndices      Textures FFX_RESOURCE_PARAMS,
                   float MipLODBias)
 {
-    AlbedoAlphaOut = GetBaseColorAlpha(Input, MaterialInfo, Textures, AllTextures, AllSamplers, MipLODBias);
-    AoRoughnessMetallicOut = GetAoRoughnessMetallic(Input, MaterialInfo, Textures, AllTextures, AllSamplers, MipLODBias, AlbedoAlphaOut.rgb);
+    AlbedoAlphaOut = GetBaseColorAlpha(Input, MaterialInfo, Textures FFX_RESOURCE_ARGS, MipLODBias);
+    AoRoughnessMetallicOut = GetAoRoughnessMetallic(Input, MaterialInfo, Textures FFX_RESOURCE_ARGS, MipLODBias, AlbedoAlphaOut.rgb);
 }
 
-float3 GetNormalTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textures, SceneInformation SceneInfo, Texture2D AllTextures[], SamplerState AllSamplers[], float MipLODBias)
+float3 GetNormalTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textures, SceneInformation SceneInfo FFX_RESOURCE_PARAMS, float MipLODBias)
 {
     float2 uv = float2(0.0, 0.0);
 #ifdef ID_normalTexCoord
@@ -352,7 +370,7 @@ float3 GetNormalTexture(VS_SURFACE_OUTPUT Input, TextureIndices Textures, SceneI
 
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
-float3 GetPixelNormal(VS_SURFACE_OUTPUT Input, TextureIndices Textures, SceneInformation SceneInfo, Texture2D AllTextures[], SamplerState AllSamplers[], float MipLODBias, bool isFrontFace)
+float3 GetPixelNormal(VS_SURFACE_OUTPUT Input, TextureIndices Textures, SceneInformation SceneInfo FFX_RESOURCE_PARAMS, float MipLODBias, bool isFrontFace)
 {
     // Retrieve the tangent space matrix
 #ifndef HAS_TANGENT
@@ -390,7 +408,7 @@ float3 GetPixelNormal(VS_SURFACE_OUTPUT Input, TextureIndices Textures, SceneInf
 #endif  // !HAS_TANGENT
 
 #ifdef ID_normalTexture
-    float3 n = GetNormalTexture(Input, Textures, SceneInfo, AllTextures, AllSamplers, MipLODBias);
+    float3 n = GetNormalTexture(Input, Textures, SceneInfo FFX_RESOURCE_ARGS, MipLODBias);
     n        = normalize(mul(transpose(tbn), n));
 #else
     // The tbn matrix is linearly interpolated, so we need to re-normalize
@@ -406,6 +424,8 @@ float3 GetPixelNormal(VS_SURFACE_OUTPUT Input, TextureIndices Textures, SceneInf
 
     return n;
 }
+
+#endif // SURFACE_RENDERCOMMON_HAS_TEXTURES
 
 float3 CompressNormals(const float3 normal)
 {

@@ -28,21 +28,37 @@ project(FFX_API_FSR)
 # ---------------------------------------------
 
 # Import SDK libs
-add_library(amd_fidelityfx SHARED IMPORTED)
-set_target_properties(amd_fidelityfx PROPERTIES
-					  INTERFACE_INCLUDE_DIRECTORIES 		"${API_ROOT}/include"
-					  IMPORTED_LOCATION_RELEASEDX12 		"${FFX_API_PATHNAME_DX12}.dll"
-					  IMPORTED_LOCATION_RELWITHDEBINFODX12 	"${FFX_API_PATHNAME_DX12DREL}.dll"
-					  IMPORTED_LOCATION_DEBUGDX12 			"${FFX_API_PATHNAME_DX12D}.dll"
-					  IMPORTED_LOCATION_RELEASEVK 			"${FFX_API_PATHNAME_VK}.dll"
-					  IMPORTED_LOCATION_RELWITHDEBINFOVK 	"${FFX_API_PATHNAME_VKDREL}.dll"
-					  IMPORTED_LOCATION_DEBUGVK 			"${FFX_API_PATHNAME_VKD}.dll"
-					  IMPORTED_IMPLIB_RELEASEDX12 			"${FFX_API_PATHNAME_DX12}.lib"
-					  IMPORTED_IMPLIB_RELWITHDEBINFODX12 	"${FFX_API_PATHNAME_DX12DREL}.lib"
-					  IMPORTED_IMPLIB_DEBUGDX12 			"${FFX_API_PATHNAME_DX12D}.lib"
-					  IMPORTED_IMPLIB_RELEASEVK 			"${FFX_API_PATHNAME_VK}.lib"
-					  IMPORTED_IMPLIB_RELWITHDEBINFOVK 		"${FFX_API_PATHNAME_VKDREL}.lib"
-					  IMPORTED_IMPLIB_DEBUGVK 				"${FFX_API_PATHNAME_VKD}.lib")
+if (WIN32)
+	add_library(amd_fidelityfx SHARED IMPORTED)
+	set_target_properties(amd_fidelityfx PROPERTIES
+						  INTERFACE_INCLUDE_DIRECTORIES 		"${API_ROOT}/include"
+						  IMPORTED_LOCATION_RELEASEDX12 		"${FFX_API_PATHNAME_DX12}.dll"
+						  IMPORTED_LOCATION_RELWITHDEBINFODX12 	"${FFX_API_PATHNAME_DX12DREL}.dll"
+						  IMPORTED_LOCATION_DEBUGDX12 			"${FFX_API_PATHNAME_DX12D}.dll"
+						  IMPORTED_LOCATION_RELEASEVK 			"${FFX_API_PATHNAME_VK}.dll"
+						  IMPORTED_LOCATION_RELWITHDEBINFOVK 	"${FFX_API_PATHNAME_VKDREL}.dll"
+						  IMPORTED_LOCATION_DEBUGVK 			"${FFX_API_PATHNAME_VKD}.dll"
+						  IMPORTED_IMPLIB_RELEASEDX12 			"${FFX_API_PATHNAME_DX12}.lib"
+						  IMPORTED_IMPLIB_RELWITHDEBINFODX12 	"${FFX_API_PATHNAME_DX12DREL}.lib"
+						  IMPORTED_IMPLIB_DEBUGDX12 			"${FFX_API_PATHNAME_DX12D}.lib"
+						  IMPORTED_IMPLIB_RELEASEVK 			"${FFX_API_PATHNAME_VK}.lib"
+						  IMPORTED_IMPLIB_RELWITHDEBINFOVK 		"${FFX_API_PATHNAME_VKDREL}.lib"
+						  IMPORTED_IMPLIB_DEBUGVK 				"${FFX_API_PATHNAME_VKD}.lib")
+else()
+	add_library(amd_fidelityfx STATIC IMPORTED)
+	set(FFX_API_LIB "${API_ROOT}/bin/libamd_fidelityfx_vk.a")
+	set(FFX_API_LIB_DIR "${API_ROOT}/bin")
+	set(FFX_API_EXTRA_LIBS
+		"${FFX_API_LIB_DIR}/libffx_backend_vk_x64.a"
+		"${FFX_API_LIB_DIR}/libffx_fsr2_x64.a"
+		"${FFX_API_LIB_DIR}/libffx_fsr3upscaler_x64.a"
+		"${FFX_API_LIB_DIR}/libffx_frameinterpolation_x64.a"
+		"${FFX_API_LIB_DIR}/libffx_opticalflow_x64.a"
+		"${FFX_API_LIB_DIR}/libffx_denoiser_x64.a")
+	set_target_properties(amd_fidelityfx PROPERTIES
+						  INTERFACE_INCLUDE_DIRECTORIES "${API_ROOT}/include"
+						  IMPORTED_LOCATION "${FFX_API_LIB}")
+endif()
 
 # FSR render module files
 set(fsr_api_src ${CMAKE_CURRENT_SOURCE_DIR}/fsrapirendermodule.h ${CMAKE_CURRENT_SOURCE_DIR}/fsrapirendermodule.cpp)
@@ -52,35 +68,53 @@ set(config_file ${CMAKE_CURRENT_SOURCE_DIR}/config/fsrapiconfig.json)
 copyCommand("${config_file}" ${CONFIG_OUTPUT})
 
 # Add the sample to the solution
-add_executable(${PROJECT_NAME} WIN32 ${default_icon_src} ${default_entry_point} ${default_sample_files} ${config_file} ${fsr_api_src} ${fsr_shaders})
+if (WIN32)
+	add_executable(${PROJECT_NAME} WIN32 ${default_icon_src} ${default_entry_point} ${default_sample_files} ${config_file} ${fsr_api_src} ${fsr_shaders})
+else()
+	add_executable(${PROJECT_NAME} ${default_icon_src} ${default_entry_point} ${default_sample_files} ${config_file} ${fsr_api_src} ${fsr_shaders})
+endif()
 
 # Setup the correct exe based on backend name
 set(EXE_OUT_NAME ${PROJECT_NAME}_)
 
 # Link everything
-target_link_libraries(${PROJECT_NAME} LINK_PUBLIC Framework RenderModules d3dcompiler amd_fidelityfx backend_interface_stub)
-set_target_properties(${PROJECT_NAME} PROPERTIES
-						OUTPUT_NAME_DEBUGDX12 "${EXE_OUT_NAME}DX12D"
-						OUTPUT_NAME_DEBUGVK "${EXE_OUT_NAME}VKD"
-						OUTPUT_NAME_RELEASEDX12 "${EXE_OUT_NAME}DX12"
-						OUTPUT_NAME_RELEASEVK "${EXE_OUT_NAME}VK"
-						OUTPUT_NAME_RELWITHDEBINFODX12 "${EXE_OUT_NAME}drelDX12"
-						OUTPUT_NAME_RELWITHDEBINFOVK "${EXE_OUT_NAME}drelVK"
-						VS_DEBUGGER_WORKING_DIRECTORY "${BIN_OUTPUT}")
+if (WIN32)
+	target_link_libraries(${PROJECT_NAME} LINK_PUBLIC Framework RenderModules d3dcompiler amd_fidelityfx backend_interface_stub)
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+							OUTPUT_NAME_DEBUGDX12 "${EXE_OUT_NAME}DX12D"
+							OUTPUT_NAME_DEBUGVK "${EXE_OUT_NAME}VKD"
+							OUTPUT_NAME_RELEASEDX12 "${EXE_OUT_NAME}DX12"
+							OUTPUT_NAME_RELEASEVK "${EXE_OUT_NAME}VK"
+							OUTPUT_NAME_RELWITHDEBINFODX12 "${EXE_OUT_NAME}drelDX12"
+							OUTPUT_NAME_RELWITHDEBINFOVK "${EXE_OUT_NAME}drelVK"
+							VS_DEBUGGER_WORKING_DIRECTORY "${BIN_OUTPUT}")
+else()
+	target_link_libraries(${PROJECT_NAME} LINK_PUBLIC Framework RenderModules amd_fidelityfx backend_interface_stub ${FFX_API_EXTRA_LIBS})
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+							OUTPUT_NAME "${EXE_OUT_NAME}VK")
+endif()
 
-file(GLOB api_dlls ${FFX_API_ROOTPATH}/*.dll)
+if (WIN32)
+	file(GLOB api_dlls ${FFX_API_ROOTPATH}/*.dll)
 
-# Copy amd_fidelityfx dll to output. Relies on it being built before this project is configured!
-# TODO: remove tech debt from build system....
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_if_different
-	${api_dlls} ${BIN_OUTPUT})
+	# Copy amd_fidelityfx dll to output. Relies on it being built before this project is configured!
+	# TODO: remove tech debt from build system....
+	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		${api_dlls} ${BIN_OUTPUT})
+endif()
 
 # Add compile definitions to identify the sample
 target_compile_definitions(${PROJECT_NAME} PRIVATE SampleName=L"FidelityFX FSR FFXAPI v1.3"
 										   ConfigFileName=L"configs/fsrapiconfig.json"
 										   ConfigSampleName="FidelityFX FSR FFXAPI"
-										   RenderModuleName=FSRApi)
+										   RenderModuleName=FSRApi
+										   RenderModuleClass=FSRRenderModule
+										   RenderModuleString="FSRApiRenderModule"
+										   RenderModuleHeader="fsrapi/fsrapirendermodule.h")
+if (NOT WIN32)
+	target_compile_definitions(${PROJECT_NAME} PRIVATE FFX_API_VK)
+endif()
 
 # Add manifest info
 addManifest(${PROJECT_NAME})

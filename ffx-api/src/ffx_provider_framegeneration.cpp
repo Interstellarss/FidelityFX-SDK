@@ -74,11 +74,22 @@ struct InternalFgContext
 #define STRINGIFY(X) STRINGIFY_(X) 
 #define MAKE_VERSION_STRING(major, minor, patch) STRINGIFY major "." STRINGIFY minor "." STRINGIFY patch
 
+#ifdef _WIN32
 uint64_t ffxProvider_FrameGeneration::GetId() const
 {
     // FG, version from header
     return 0xF600'0000ui64 << 32u | (FFX_SDK_MAKE_VERSION(FFX_FRAMEINTERPOLATION_VERSION_MAJOR, FFX_FRAMEINTERPOLATION_VERSION_MINOR, FFX_FRAMEINTERPOLATION_VERSION_PATCH) & 0xFFFF'FFFF);
 }
+#else
+uint64_t ffxProvider_FrameGeneration::GetId() const
+{
+    uint64_t base = 0xF6000000ULL;
+    uint64_t ver  = FFX_SDK_MAKE_VERSION(FFX_FRAMEINTERPOLATION_VERSION_MAJOR,
+                                        FFX_FRAMEINTERPOLATION_VERSION_MINOR,
+                                        FFX_FRAMEINTERPOLATION_VERSION_PATCH) & 0xFFFFFFFFULL;
+    return (base << 32) | ver;
+}
+#endif
 
 const char* ffxProvider_FrameGeneration::GetVersionName() const
 {

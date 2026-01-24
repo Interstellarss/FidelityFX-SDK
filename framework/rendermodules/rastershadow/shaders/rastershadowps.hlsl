@@ -20,14 +20,22 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#ifndef MAX_TEXTURES_COUNT
+    #define MAX_TEXTURES_COUNT 1000
+#endif
+#ifndef MAX_SAMPLERS_COUNT
+    #define MAX_SAMPLERS_COUNT 20
+#endif
+
+Texture2D AllTextures[MAX_TEXTURES_COUNT]    : register(t0);
+SamplerState AllSamplers[MAX_SAMPLERS_COUNT] : register(s0);
+
+#define SURFACE_RENDERCOMMON_HAS_TEXTURES 1
 #include "surfacerendercommon.h"
 
 //////////////////////////////////////////////////////////////////////////
 // Resources
 //////////////////////////////////////////////////////////////////////////
-
-Texture2D    AllTextures[] : register(t0);
-SamplerState AllSamplers[] : register(s0);
 
 cbuffer CBSceneInformation : register(b0)
 {
@@ -45,7 +53,7 @@ cbuffer CBTextureIndices : register(b2)
 void DiscardPixelIfAlphaCutOff(VS_SURFACE_OUTPUT Input)
 {
 #if defined(DEF_alphaMode_MASK) && defined(DEF_alphaCutoff)
-    float4 BaseColorAlpha = GetBaseColorAlpha(Input, InstanceInfo.MaterialInfo, Textures, AllTextures, AllSamplers, SceneInfo.MipLODBias);
+    float4 BaseColorAlpha = GetBaseColorAlpha(Input, InstanceInfo.MaterialInfo, Textures FFX_RESOURCE_ARGS, SceneInfo.MipLODBias);
     if (BaseColorAlpha.a < DEF_alphaCutoff)
         discard;
 #endif

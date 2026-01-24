@@ -26,6 +26,8 @@
 #include "misc/log.h"
 #include "misc/math.h"
 
+#include <atomic>
+
 namespace cauldron
 {
     static const int32_t s_UIDialogXSpacing = 10;
@@ -112,7 +114,7 @@ namespace cauldron
 
     protected:
 
-        std::atomic_bool    m_BackendReady = false;
+        std::atomic_bool    m_BackendReady;
 
         bool    m_ShowTabbedDialog = true;
         bool    m_ShowPerfDialog = true;

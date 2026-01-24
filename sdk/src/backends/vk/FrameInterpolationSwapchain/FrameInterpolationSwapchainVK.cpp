@@ -628,14 +628,14 @@ FFX_API FfxErrorCode ffxGetSwapchainReplacementFunctionsVK(FfxDevice ffxDevice, 
     return FFX_OK;
 }
 
-FfxErrorCode ffxRegisterFrameinterpolationUiResourceVK(FfxSwapchain gameSwapChain, FfxResource uiResource, uint32_t flags)
+extern "C" FFX_API FfxErrorCode ffxRegisterFrameinterpolationUiResourceVK(FfxSwapchain gameSwapChain, FfxResource uiResource, uint32_t flags)
 {
     FrameInterpolationSwapChainVK* pSwapChainVK = reinterpret_cast<FrameInterpolationSwapChainVK*>(gameSwapChain);
     pSwapChainVK->registerUiResource(uiResource, flags);
     return FFX_OK;
 }
 
-FFX_API FfxErrorCode ffxSetFrameGenerationConfigToSwapchainVK(FfxFrameGenerationConfig const* config)
+extern "C" FFX_API FfxErrorCode ffxSetFrameGenerationConfigToSwapchainVK(FfxFrameGenerationConfig const* config)
 {
     FfxErrorCode result = FFX_ERROR_INVALID_ARGUMENT;
 
@@ -652,7 +652,7 @@ FFX_API FfxErrorCode ffxSetFrameGenerationConfigToSwapchainVK(FfxFrameGeneration
     return result;
 }
 
-FfxErrorCode ffxConfigureFrameInterpolationSwapchainVK(FfxSwapchain gameSwapChain, FfxFrameInterpolationSwapchainConfigureKey key, void* valuePtr)
+extern "C" FFX_API FfxErrorCode ffxConfigureFrameInterpolationSwapchainVK(FfxSwapchain gameSwapChain, FfxFrameInterpolationSwapchainConfigureKey key, void* valuePtr)
 {
     if (gameSwapChain)
     {
@@ -660,7 +660,10 @@ FfxErrorCode ffxConfigureFrameInterpolationSwapchainVK(FfxSwapchain gameSwapChai
         switch (key)
         {
             case FFX_FI_SWAPCHAIN_CONFIGURE_KEY_WAITCALLBACK:
-                pSwapChainVK->setWaitCallback(static_cast<FfxWaitCallbackFunc>(valuePtr));
+                if (valuePtr != nullptr)
+                {
+                    pSwapChainVK->setWaitCallback(reinterpret_cast<FfxWaitCallbackFunc>(valuePtr));
+                }
             break;
             case FFX_FI_SWAPCHAIN_CONFIGURE_KEY_FRAMEPACINGTUNING:
                 if (valuePtr != nullptr)
@@ -675,14 +678,14 @@ FfxErrorCode ffxConfigureFrameInterpolationSwapchainVK(FfxSwapchain gameSwapChai
     return FFX_ERROR_INVALID_ARGUMENT;
 }
 
-FfxResource ffxGetFrameinterpolationTextureVK(FfxSwapchain gameSwapChain)
+extern "C" FFX_API FfxResource ffxGetFrameinterpolationTextureVK(FfxSwapchain gameSwapChain)
 {
     FrameInterpolationSwapChainVK* pSwapChainVK = reinterpret_cast<FrameInterpolationSwapChainVK*>(gameSwapChain);
     FfxResource res = pSwapChainVK->interpolationOutput(0);
     return res;
 }
 
-FfxErrorCode ffxGetFrameinterpolationCommandlistVK(FfxSwapchain gameSwapChain, FfxCommandList& gameCommandlist)
+extern "C" FFX_API FfxErrorCode ffxGetFrameinterpolationCommandlistVK(FfxSwapchain gameSwapChain, FfxCommandList& gameCommandlist)
 {
     FrameInterpolationSwapChainVK* frameinterpolationSwapchain = reinterpret_cast<FrameInterpolationSwapChainVK*>(gameSwapChain);
 
@@ -691,7 +694,7 @@ FfxErrorCode ffxGetFrameinterpolationCommandlistVK(FfxSwapchain gameSwapChain, F
     return FFX_OK;
 }
 
-FfxErrorCode ffxReplaceSwapchainForFrameinterpolationVK(FfxCommandQueue                    gameQueue,
+extern "C" FFX_API FfxErrorCode ffxReplaceSwapchainForFrameinterpolationVK(FfxCommandQueue                    gameQueue,
                                                         FfxSwapchain&                      gameSwapChain,
                                                         const VkSwapchainCreateInfoKHR*    swapchainCreateInfo,
                                                         const VkFrameInterpolationInfoFFX* frameInterpolationInfo)
@@ -737,7 +740,7 @@ FfxErrorCode ffxReplaceSwapchainForFrameinterpolationVK(FfxCommandQueue         
     return status;
 }
 
-FfxErrorCode ffxWaitForPresents(FfxSwapchain gameSwapChain)
+extern "C" FFX_API FfxErrorCode ffxWaitForPresents(FfxSwapchain gameSwapChain)
 {
     FrameInterpolationSwapChainVK* frameinterpolationSwapchain = reinterpret_cast<FrameInterpolationSwapChainVK*>(gameSwapChain);
 
@@ -746,7 +749,7 @@ FfxErrorCode ffxWaitForPresents(FfxSwapchain gameSwapChain)
     return FFX_OK;
 }
 
-FfxErrorCode ffxFrameInterpolationSwapchainGetGpuMemoryUsageVK(FfxSwapchain gameSwapChain, FfxEffectMemoryUsage* vramUsage)
+extern "C" FFX_API FfxErrorCode ffxFrameInterpolationSwapchainGetGpuMemoryUsageVK(FfxSwapchain gameSwapChain, FfxEffectMemoryUsage* vramUsage)
 {
     FFX_RETURN_ON_ERROR(vramUsage, FFX_ERROR_INVALID_POINTER);
     FrameInterpolationSwapChainVK* pSwapChainVK = reinterpret_cast<FrameInterpolationSwapChainVK*>(gameSwapChain);
@@ -1184,7 +1187,8 @@ DWORD WINAPI composeAndPresent_presenterThread(LPVOID pParam)
                     // if no frame was presented, we still need to update the semaphore
                     if (toWait.count > 0)
                     {
-                        presenter->presentQueue.submit(VK_NULL_HANDLE, toWait, SubmissionSemaphores());
+                        SubmissionSemaphores emptySignal;
+                        presenter->presentQueue.submit(VK_NULL_HANDLE, toWait, emptySignal);
                     }
 
                     numFramesSentForPresentation = entry.numFramesSentForPresentationBase + entry.numFramesToPresent;
@@ -1357,8 +1361,10 @@ struct SwapchainCreationInfo
 
     VkImageCompressionControlEXT             imageCompressionControl;
     VkImageFormatListCreateInfo              imageFormatList;
+#ifdef _WIN32
     VkSurfaceFullScreenExclusiveInfoEXT      surfaceFullScreenExclusive;
     VkSurfaceFullScreenExclusiveWin32InfoEXT surfaceFullScreenExclusiveWin32;
+#endif
     VkSwapchainCounterCreateInfoEXT          swapchainCounter;
     VkSwapchainDisplayNativeHdrCreateInfoAMD swapchainDisplayNativeHdr;
     VkSwapchainPresentModesCreateInfoEXT     swapchainPresentModes;
@@ -1393,12 +1399,16 @@ VkResult getRealSwapchainCreateInfo(const VkSwapchainCreateInfoKHR* pCreateInfo,
             FFX_USE_PNEXT_AS_IS(imageFormatList, VkImageFormatListCreateInfo);
             break;
         case VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_INFO_EXT:
+#ifdef _WIN32
             realSwapchainCreateInfo.surfaceFullScreenExclusive       = *reinterpret_cast<const VkSurfaceFullScreenExclusiveInfoEXT*>(pCurrent);
             realSwapchainCreateInfo.surfaceFullScreenExclusive.pNext = const_cast<void*>(realSwapchainCreateInfo.swapchain.pNext);  // because pNext is void* instead of const void* in vulkan header
             realSwapchainCreateInfo.swapchain.pNext                  = &realSwapchainCreateInfo.surfaceFullScreenExclusive;
+#endif
             break;
         case VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_WIN32_INFO_EXT:
+#ifdef _WIN32
             FFX_USE_PNEXT_AS_IS(surfaceFullScreenExclusiveWin32, VkSurfaceFullScreenExclusiveWin32InfoEXT);
+#endif
             break;
         case VK_STRUCTURE_TYPE_SWAPCHAIN_COUNTER_CREATE_INFO_EXT:
             FFX_USE_PNEXT_AS_IS(swapchainCounter, VkSwapchainCounterCreateInfoEXT);
@@ -2823,7 +2833,8 @@ VkResult FrameInterpolationSwapChainVK::submitCompositionOnGameQueue(const Pacin
         // if no frame was presented, we still need to update the semaphore
         if (toWait.count > 0)
         {
-            res = presentInfo.gameQueue.submit(VK_NULL_HANDLE, toWait, SubmissionSemaphores());
+            SubmissionSemaphores emptySignal;
+            res = presentInfo.gameQueue.submit(VK_NULL_HANDLE, toWait, emptySignal);
         }
     }
 

@@ -34,11 +34,25 @@
 #include "render/renderdefines.h"
 #include "render/uploadheap.h"
 #include "render/swapchain.h"
+#include "core/inputmanager.h"
 
 #include <array>
+#include <cstdlib>
 #include <limits>
+#include <string>
 
 using namespace cauldron;
+
+namespace
+{
+    bool IsEnvEnabled(const char* name)
+    {
+        const char* value = std::getenv(name);
+        if (!value || value[0] == '\0')
+            return false;
+        return value[0] != '0';
+    }
+}
 
 BreadcrumbsRenderModule::BreadcrumbsRenderModule()
     : RenderModule(L"BreadcrumbsRenderModule")
@@ -65,6 +79,11 @@ BreadcrumbsRenderModule::~BreadcrumbsRenderModule()
 
 void BreadcrumbsRenderModule::Init(const json& initData)
 {
+    if (IsEnvEnabled("FFX_BREADCRUMBS_DISABLE_CRASH"))
+        m_CrashFrame = std::numeric_limits<uint64_t>::max();
+    if (IsEnvEnabled("FFX_BREADCRUMBS_DUMP_ON_START"))
+        m_DumpPending = true;
+
     m_pRenderTarget = GetFramework()->GetColorTargetForCallback(GetName());
     m_pRasterView = GetRasterViewAllocator()->RequestRasterView(m_pRenderTarget, ViewDimension::Texture2D);
     GetDevice()->RegisterDeviceRemovedCallback(BreadcrumbsRenderModule::ProcessDeviceRemovedEvent, &m_BreadContext);
@@ -134,6 +153,10 @@ void BreadcrumbsRenderModule::Init(const json& initData)
 
 void BreadcrumbsRenderModule::Execute(double deltaTime, cauldron::CommandList* pCmdList)
 {
+    const InputState& inputState = GetInputManager()->GetInputState();
+    if (inputState.GetKeyUpState(Key_F9))
+        m_DumpPending = true;
+
     // Crash case: infinite loop in single vertex shader invocation
     uint32_t crashLoopCount = 0;
     // Wait for crash frame to not miss the crash point due to too fast execution
@@ -173,7 +196,8 @@ void BreadcrumbsRenderModule::Execute(double deltaTime, cauldron::CommandList* p
         CAULDRON_ASSERT(errorCode == FFX_OK);
         {
             float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-            ClearRenderTarget(pCmdList, &m_pRasterView->GetResourceView(), clearColor);
+            const ResourceViewInfo rasterView = m_pRasterView->GetResourceView();
+            ClearRenderTarget(pCmdList, &rasterView, clearColor);
         }
         errorCode = ffxBreadcrumbsEndMarker(&m_BreadContext, SDKWrapper::ffxGetCommandList(pCmdList));
         CAULDRON_ASSERT(errorCode == FFX_OK);
@@ -214,6 +238,38 @@ void BreadcrumbsRenderModule::Execute(double deltaTime, cauldron::CommandList* p
                                   ResourceState::RenderTargetResource,
                                   ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource);
     ResourceBarrier(pCmdList, 1, &barrier);
+
+    if (m_DumpPending)
+    {
+        DumpBreadcrumbsNow();
+        m_DumpPending = false;
+    }
+}
+
+void BreadcrumbsRenderModule::DumpBreadcrumbsNow()
+{
+    if (!m_BreadContextCreated)
+        return;
+
+    GetDevice()->FlushAllCommandQueues();
+
+    FfxBreadcrumbsMarkersStatus markerStatus = {};
+    FfxErrorCode result = ffxBreadcrumbsPrintStatus(&m_BreadContext, &markerStatus);
+    CauldronAssert(ASSERT_WARNING, result == FFX_OK, L"Failed to retrieve markers buffer!");
+
+    std::string filename = "breadcrumbs_sample_dumpfile.txt";
+    if (m_DumpIndex > 0)
+        filename = "breadcrumbs_sample_dumpfile_" + std::to_string(m_DumpIndex) + ".txt";
+
+    std::ofstream fout(filename.c_str(), std::ios::binary);
+    if (fout.good())
+    {
+        fout.write(markerStatus.pBuffer, markerStatus.bufferSize);
+        fout.close();
+    }
+
+    FFX_SAFE_FREE(markerStatus.pBuffer, free);
+    ++m_DumpIndex;
 }
 
 void BreadcrumbsRenderModule::ProcessDeviceRemovedEvent(void* data)

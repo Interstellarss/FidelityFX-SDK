@@ -49,14 +49,19 @@ set(CMAKE_CONFIGURATION_TYPES Debug Release RelWithDebInfo)
 set(CMAKE_DEBUG_POSTFIX d)
 set(CMAKE_RELWITHDEBINFO_POSTFIX drel)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_HOME_DIRECTORY}/bin)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_HOME_DIRECTORY}/bin)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_HOME_DIRECTORY}/bin)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_HOME_DIRECTORY}/bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_HOME_DIRECTORY}/bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_HOME_DIRECTORY}/bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_HOME_DIRECTORY}/bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_HOME_DIRECTORY}/bin)
+set(FFX_API_BIN_DIR "${CMAKE_BINARY_DIR}/bin")
+if (NOT CMAKE_BINARY_DIR OR "${CMAKE_BINARY_DIR}" STREQUAL "")
+	set(FFX_API_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/bin")
+endif()
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${FFX_API_BIN_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${FFX_API_BIN_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${FFX_API_BIN_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${FFX_API_BIN_DIR}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${FFX_API_BIN_DIR}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${FFX_API_BIN_DIR}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${FFX_API_BIN_DIR}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO "${FFX_API_BIN_DIR}")
 
 
 
@@ -110,7 +115,7 @@ if (FFX_API_BACKEND STREQUAL DX12_X64 OR
 		${CMAKE_CURRENT_SOURCE_DIR}/include/ffx_api/dx12/*.hpp)
 endif()
 
-add_library(amd_fidelityfx_${FFX_PLATFORM_NAME} SHARED ${private_ffx_api} ${private_ffx_api_backend_dx12} ${private_ffx_api_backend_vk} ${public_ffx_api} ${public_ffx_api_backend_dx12} ${public_ffx_api_backend_vk})
+add_library(amd_fidelityfx_${FFX_PLATFORM_NAME} STATIC ${private_ffx_api} ${private_ffx_api_backend_dx12} ${private_ffx_api_backend_vk} ${public_ffx_api} ${public_ffx_api_backend_dx12} ${public_ffx_api_backend_vk})
 
 source_group("private_source" FILES ${private_ffx_api})
 source_group("public_source"  FILES ${public_ffx_api})
@@ -137,14 +142,43 @@ set(FFX_FSR3 ON)
 set(FFX_FSR3UPSCALER ON)
 set(FFX_OF ON)
 set(FFX_FI ON)
+set(FFX_DENOISER ON)
 set(FFX_AUTO_COMPILE_SHADERS ON)
 set(FFX_BUILD_AS_DLL OFF)
 add_subdirectory(../sdk sdk)
 
-target_link_libraries(amd_fidelityfx_${FFX_PLATFORM_NAME} PRIVATE ffx_fsr2_${CMAKE_GENERATOR_PLATFORM} ffx_fsr3upscaler_${CMAKE_GENERATOR_PLATFORM} ffx_opticalflow_${CMAKE_GENERATOR_PLATFORM} ffx_frameinterpolation_${CMAKE_GENERATOR_PLATFORM} DXGI)
+# Determine backend/platform suffix for component libs
+set(FFX_BACKEND_PLATFORM ${CMAKE_GENERATOR_PLATFORM})
+if (NOT FFX_BACKEND_PLATFORM)
+    if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(FFX_BACKEND_PLATFORM x64)
+    else()
+        set(FFX_BACKEND_PLATFORM x86)
+    endif()
+endif()
+
+target_link_libraries(amd_fidelityfx_${FFX_PLATFORM_NAME} PRIVATE
+    ffx_fsr2_${FFX_BACKEND_PLATFORM}
+    ffx_fsr3upscaler_${FFX_BACKEND_PLATFORM}
+    ffx_opticalflow_${FFX_BACKEND_PLATFORM}
+    ffx_frameinterpolation_${FFX_BACKEND_PLATFORM}
+    ffx_denoiser_${FFX_BACKEND_PLATFORM}
+)
+if (WIN32)
+    target_link_libraries(amd_fidelityfx_${FFX_PLATFORM_NAME} PRIVATE DXGI)
+endif()
 if (FFX_API_BACKEND STREQUAL VK_X64)
 	find_package(Vulkan REQUIRED)
-	target_link_libraries(amd_fidelityfx_${FFX_PLATFORM_NAME} PRIVATE Vulkan::Headers ffx_backend_vk_${CMAKE_GENERATOR_PLATFORM})
+	# Determine backend platform name for non-MSVC generators (e.g., Ninja on Linux)
+	set(FFX_BACKEND_PLATFORM ${CMAKE_GENERATOR_PLATFORM})
+	if (NOT FFX_BACKEND_PLATFORM)
+		if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+			set(FFX_BACKEND_PLATFORM x64)
+		else()
+			set(FFX_BACKEND_PLATFORM x86)
+		endif()
+	endif()
+	target_link_libraries(amd_fidelityfx_${FFX_PLATFORM_NAME} PRIVATE Vulkan::Headers ffx_backend_vk_${FFX_BACKEND_PLATFORM})
 else() # DX12
-	target_link_libraries(amd_fidelityfx_${FFX_PLATFORM_NAME} PRIVATE D3D12 ffx_backend_dx12_${CMAKE_GENERATOR_PLATFORM})
+    target_link_libraries(amd_fidelityfx_${FFX_PLATFORM_NAME} PRIVATE D3D12 ffx_backend_dx12_${FFX_BACKEND_PLATFORM})
 endif()

@@ -46,7 +46,7 @@ namespace cauldron
         return this->operator=(const_cast<PipelineDesc&&>(right));
     }
 
-    void PipelineDesc::AddShaderDesc(ShaderBuildDesc& shaderDesc)
+    void PipelineDesc::AddShaderDesc(ShaderBuildDesc shaderDesc)
     {
         if (shaderDesc.Stage == ShaderStage::Compute)
         {
@@ -75,7 +75,7 @@ namespace cauldron
         m_ShaderDescriptions.push_back(shaderDesc);
     }
 
-    void PipelineDesc::AddShaderBlobDesc(ShaderBlobDesc& shaderBlobDesc)
+    void PipelineDesc::AddShaderBlobDesc(ShaderBlobDesc shaderBlobDesc)
     {
         if (shaderBlobDesc.Stage == ShaderStage::Compute)
         {

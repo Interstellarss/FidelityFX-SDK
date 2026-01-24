@@ -22,6 +22,12 @@
 
 #include "commonintersect.hlsl"
 
+#if defined(_VK)
+#ifndef NonUniformResourceIndex
+#define NonUniformResourceIndex(x) (x)
+#endif
+#endif
+
 
 #define GOLDEN_RATIO 1.61803398875f
 #define FFX_REFLECTIONS_SKY_DISTANCE 100.0f
@@ -172,6 +178,7 @@ float3 SampleReflectionVector(float3 view_direction, float3 normal, float roughn
     return mul(reflected_direction_tbn, inv_tbn_transform);
 }
 
+#if defined(USE_INLINE_RAYTRACING) && !defined(FFX_GLSLC)
 void FFX_Fetch_Face_Indices_U32(out uint3 face3, in uint offset, in uint triangle_id)
 {
     face3[0] = g_index_buffer[NonUniformResourceIndex(offset)].Load(3 * triangle_id);
@@ -200,7 +207,6 @@ void FFX_Fetch_Face_Indices_U16(out uint3 face3, in uint offset, in uint triangl
     uint u2 = g_index_buffer[NonUniformResourceIndex(offset)].Load(dword_id_2);
     u2 = (u2 >> shift_0) & 0xffffu;
     face3 = uint3(u0, u1, u2);
-
 }
 
 float2 FFX_Fetch_float2(in int offset, in int vertex_id)
@@ -211,6 +217,7 @@ float2 FFX_Fetch_float2(in int offset, in int vertex_id)
 
     return data;
 }
+
 float3 FFX_Fetch_float3(in int offset, in int vertex_id)
 {
     float3 data;
@@ -220,6 +227,7 @@ float3 FFX_Fetch_float3(in int offset, in int vertex_id)
 
     return data;
 }
+
 float4 FFX_Fetch_float4(in int offset, in int vertex_id)
 {
     float4 data;
@@ -231,7 +239,8 @@ float4 FFX_Fetch_float4(in int offset, in int vertex_id)
     return data;
 }
 
-void   FFX_Fetch_Local_Basis(in Surface_Info sinfo, in uint3 face3, in float2 bary, out float2 uv, out float3 normal, out float4 tangent) {
+void FFX_Fetch_Local_Basis(in Surface_Info sinfo, in uint3 face3, in float2 bary, out float2 uv, out float3 normal, out float4 tangent)
+{
     float3 normal0 = FFX_Fetch_float3(sinfo.normal_attribute_offset, face3.x);
     float3 normal1 = FFX_Fetch_float3(sinfo.normal_attribute_offset, face3.y);
     float3 normal2 = FFX_Fetch_float3(sinfo.normal_attribute_offset, face3.z);
@@ -251,7 +260,9 @@ void   FFX_Fetch_Local_Basis(in Surface_Info sinfo, in uint3 face3, in float2 ba
         uv = uv1 * bary.x + uv2 * bary.y + uv0 * (1.0 - bary.x - bary.y);
     }
 }
-void FFX_Fetch_Local_Basis(in Surface_Info sinfo, in uint3 face3, in float2 bary, out float2 uv, out float3 normal) {
+
+void FFX_Fetch_Local_Basis(in Surface_Info sinfo, in uint3 face3, in float2 bary, out float2 uv, out float3 normal)
+{
     float3 normal0 = FFX_Fetch_float3(sinfo.normal_attribute_offset, face3.x);
     float3 normal1 = FFX_Fetch_float3(sinfo.normal_attribute_offset, face3.y);
     float3 normal2 = FFX_Fetch_float3(sinfo.normal_attribute_offset, face3.z);
@@ -264,6 +275,7 @@ void FFX_Fetch_Local_Basis(in Surface_Info sinfo, in uint3 face3, in float2 bary
         uv = uv1 * bary.x + uv2 * bary.y + uv0 * (1.0 - bary.x - bary.y);
     }
 }
+#endif // USE_INLINE_RAYTRACING
 
 float3 rotate(float4x4 mat, float3 v) { return mul(float3x3(mat[0].xyz, mat[1].xyz, mat[2].xyz), v); }
 float3 rotate(float3x4 mat, float3 v) { return mul(float3x3(mat[0].xyz, mat[1].xyz, mat[2].xyz), v); }

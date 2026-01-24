@@ -54,7 +54,7 @@ struct GIConstants
 
 void BrixelizerGIRenderModule::Init(const json& initData)
 {
-    m_PrevProjection = Mat4::Matrix4(0.0f);
+    m_PrevProjection = Mat4(0.0f);
 
     m_pColorTarget        = GetFramework()->GetColorTargetForCallback(GetName());
     m_pDiffuseTexture     = GetFramework()->GetRenderTexture(L"GBufferAlbedoRT");
@@ -1024,7 +1024,10 @@ void BrixelizerGIRenderModule::UpdateBrixelizerGIContext(cauldron::CommandList* 
         memcpy(&m_GIDispatchDesc.prevProjection, &m_PrevProjection, sizeof(m_GIDispatchDesc.prevProjection));
         m_PrevProjection = projection;
 
-        memcpy(&m_GIDispatchDesc.cameraPosition, &camera->GetCameraPos(), sizeof(m_GIDispatchDesc.cameraPosition));
+        const Vec3 cameraPos = camera->GetCameraPos();
+        m_GIDispatchDesc.cameraPosition[0] = cameraPos.getX();
+        m_GIDispatchDesc.cameraPosition[1] = cameraPos.getY();
+        m_GIDispatchDesc.cameraPosition[2] = cameraPos.getZ();
 
         m_GIDispatchDesc.startCascade        = m_StartCascadeIdx + (2 * NUM_BRIXELIZER_CASCADES);
         m_GIDispatchDesc.endCascade          = m_EndCascadeIdx + (2 * NUM_BRIXELIZER_CASCADES);
@@ -1436,7 +1439,7 @@ uint32_t BrixelizerGIRenderModule::GetBufferIndex(const cauldron::Buffer* buffer
     const GPUResource* resource   = buffer->GetResource();
 
     wchar_t name[256] = {};
-    _snwprintf_s(name, _countof(name), L"Vertex Buffer (\"%s\")", bufferDesc.Name.c_str());
+    swprintf(name, _countof(name), L"Vertex Buffer (\"%s\")", bufferDesc.Name.c_str());
     FfxResource ffxResource = SDKWrapper::ffxGetResource(resource, name, FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 
     uint32_t                bufferIndex          = 0;

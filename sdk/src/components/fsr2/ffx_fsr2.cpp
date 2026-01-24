@@ -24,6 +24,7 @@
 #include <cmath>        // for fabs, abs, sinf, sqrt, etc.
 #include <string.h>     // for memset
 #include <cfloat>       // for FLT_EPSILON
+#include <cstdlib>      // for getenv
 
 #ifdef __clang__
 #pragma clang diagnostic ignored "-Wsign-compare"
@@ -67,9 +68,12 @@ static const ResourceBinding srvTextureBindingTable[] =
     {FFX_FSR2_RESOURCE_IDENTIFIER_AUTO_EXPOSURE,                            L"r_auto_exposure"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_INPUT_REACTIVE_MASK,                      L"r_reactive_mask"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_INPUT_TRANSPARENCY_AND_COMPOSITION_MASK,  L"r_transparency_and_composition_mask"},
+    {FFX_FSR2_RESOURCE_IDENTIFIER_INPUT_TRANSPARENCY_AND_COMPOSITION_MASK,  L"r_transparency_and_composition_"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_RECONSTRUCTED_PREVIOUS_NEAREST_DEPTH,     L"r_reconstructed_previous_nearest_depth"},
+    {FFX_FSR2_RESOURCE_IDENTIFIER_RECONSTRUCTED_PREVIOUS_NEAREST_DEPTH,     L"r_reconstructed_previous_neares"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_DILATED_MOTION_VECTORS,                   L"r_dilated_motion_vectors"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_PREVIOUS_DILATED_MOTION_VECTORS,          L"r_previous_dilated_motion_vectors"},
+    {FFX_FSR2_RESOURCE_IDENTIFIER_PREVIOUS_DILATED_MOTION_VECTORS,          L"r_previous_dilated_motion_vecto"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_DILATED_DEPTH,                            L"r_dilatedDepth"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_INTERNAL_UPSCALED_COLOR,                  L"r_internal_upscaled_color"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_LOCK_STATUS,                              L"r_lock_status"},
@@ -91,6 +95,7 @@ static const ResourceBinding srvTextureBindingTable[] =
 static const ResourceBinding uavTextureBindingTable[] =
 {
     {FFX_FSR2_RESOURCE_IDENTIFIER_RECONSTRUCTED_PREVIOUS_NEAREST_DEPTH,    L"rw_reconstructed_previous_nearest_depth"},
+    {FFX_FSR2_RESOURCE_IDENTIFIER_RECONSTRUCTED_PREVIOUS_NEAREST_DEPTH,    L"rw_reconstructed_previous_neare"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_DILATED_MOTION_VECTORS,                  L"rw_dilated_motion_vectors"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_DILATED_DEPTH,                           L"rw_dilatedDepth"},
     {FFX_FSR2_RESOURCE_IDENTIFIER_INTERNAL_UPSCALED_COLOR,                 L"rw_internal_upscaled_color"},
@@ -323,6 +328,25 @@ static void fsr2DebugCheckDispatch(FfxFsr2Context_Private* context, const FfxFsr
 
 static FfxErrorCode patchResourceBindings(FfxPipelineState* inoutPipeline)
 {
+    auto isEnvEnabled = [](const char* name) -> bool {
+        const char* value = std::getenv(name);
+        if (!value || value[0] == '\0')
+            return false;
+        return strcmp(value, "1") == 0 || strcmp(value, "true") == 0 || strcmp(value, "TRUE") == 0;
+    };
+
+    auto wideToAscii = [](const wchar_t* in, char* out, size_t outLen) {
+        size_t i = 0;
+        if (!outLen) {
+            return;
+        }
+        for (; i + 1 < outLen && in && in[i] != L'\0'; ++i) {
+            const wchar_t c = in[i];
+            out[i] = (c >= 0 && c < 128) ? static_cast<char>(c) : '?';
+        }
+        out[i] = '\0';
+    };
+
     for (uint32_t srvIndex = 0; srvIndex < inoutPipeline->srvTextureCount; ++srvIndex)
     {
         int32_t mapIndex = 0;
@@ -332,7 +356,16 @@ static FfxErrorCode patchResourceBindings(FfxPipelineState* inoutPipeline)
                 break;
         }
         if (mapIndex == _countof(srvTextureBindingTable))
+        {
+            if (isEnvEnabled("FFX_FSR2_LOG_BINDINGS")) {
+                char pipelineName[128] = {};
+                char bindingName[128] = {};
+                wideToAscii(inoutPipeline->name, pipelineName, sizeof(pipelineName));
+                wideToAscii(inoutPipeline->srvTextureBindings[srvIndex].name, bindingName, sizeof(bindingName));
+                printf("[FFX_FSR2] Missing SRV binding '%s' in pipeline '%s'\n", bindingName, pipelineName);
+            }
             return FFX_ERROR_INVALID_ARGUMENT;
+        }
 
         inoutPipeline->srvTextureBindings[srvIndex].resourceIdentifier = srvTextureBindingTable[mapIndex].index;
     }
@@ -346,7 +379,16 @@ static FfxErrorCode patchResourceBindings(FfxPipelineState* inoutPipeline)
                 break;
         }
         if (mapIndex == _countof(uavTextureBindingTable))
+        {
+            if (isEnvEnabled("FFX_FSR2_LOG_BINDINGS")) {
+                char pipelineName[128] = {};
+                char bindingName[128] = {};
+                wideToAscii(inoutPipeline->name, pipelineName, sizeof(pipelineName));
+                wideToAscii(inoutPipeline->uavTextureBindings[uavIndex].name, bindingName, sizeof(bindingName));
+                printf("[FFX_FSR2] Missing UAV binding '%s' in pipeline '%s'\n", bindingName, pipelineName);
+            }
             return FFX_ERROR_INVALID_ARGUMENT;
+        }
 
         inoutPipeline->uavTextureBindings[uavIndex].resourceIdentifier = uavTextureBindingTable[mapIndex].index;
     }
@@ -360,7 +402,16 @@ static FfxErrorCode patchResourceBindings(FfxPipelineState* inoutPipeline)
                 break;
         }
         if (mapIndex == _countof(constantBufferBindingTable))
+        {
+            if (isEnvEnabled("FFX_FSR2_LOG_BINDINGS")) {
+                char pipelineName[128] = {};
+                char bindingName[128] = {};
+                wideToAscii(inoutPipeline->name, pipelineName, sizeof(pipelineName));
+                wideToAscii(inoutPipeline->constantBufferBindings[cbIndex].name, bindingName, sizeof(bindingName));
+                printf("[FFX_FSR2] Missing CB binding '%s' in pipeline '%s'\n", bindingName, pipelineName);
+            }
             return FFX_ERROR_INVALID_ARGUMENT;
+        }
 
         inoutPipeline->constantBufferBindings[cbIndex].resourceIdentifier = constantBufferBindingTable[mapIndex].index;
     }
@@ -1352,7 +1403,9 @@ FfxErrorCode ffxFsr2ContextCreate(FfxFsr2Context* context, const FfxFsr2ContextD
     }
     
     // ensure the context is large enough for the internal context.
+#if defined(_WIN32)
     FFX_STATIC_ASSERT(sizeof(FfxFsr2Context) >= sizeof(FfxFsr2Context_Private));
+#endif
 
     // create the context.
     FfxFsr2Context_Private* contextPrivate = (FfxFsr2Context_Private*)(context);

@@ -117,7 +117,11 @@ void SPDRenderModule::Init(const json& initData)
         this->TextureLoadComplete(textures, additionalParams); 
     };
 
+#if defined(_WIN32)
     filesystem::path texturePath = L"..\\media\\Textures\\SPD\\spd_cubemap.dds";
+#else
+    filesystem::path texturePath = L"../media/Textures/SPD/spd_cubemap.dds";
+#endif
     GetContentManager()->LoadTexture(TextureLoadInfo(texturePath, true, 1.f, 
         ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess), 
         completionCallback);

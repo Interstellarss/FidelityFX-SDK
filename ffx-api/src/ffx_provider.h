@@ -23,7 +23,10 @@
 #pragma once
 #include <ffx_api/ffx_api.hpp>
 #include <ffx_api/ffx_api_types.h>
-#include <FidelityFx/host/ffx_types.h>
+#include <FidelityFX/host/ffx_types.h>
+#include <cstdlib>
+#include <cstring>
+#include <new>
 
 #define VERIFY(_cond, _retcode) \
     if (!(_cond)) return _retcode

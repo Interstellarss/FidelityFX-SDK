@@ -257,8 +257,8 @@ namespace cauldron
         {
             ASInstance& asInstance = m_ManagedInstances.front();
 
-            const BLAS* activeBlas = asInstance.Mesh->HasAnimatedBlas() ? asInstance.AnimatedBlas : asInstance.Mesh->GetStaticBlas();
-            m_pTlas->AddInstance(activeBlas, asInstance.Transform, asInstance.Mesh->GetMeshIndex());
+            const BLAS* activeBlas = asInstance.pMesh->HasAnimatedBlas() ? asInstance.AnimatedBlas : asInstance.pMesh->GetStaticBlas();
+            m_pTlas->AddInstance(activeBlas, asInstance.Transform, asInstance.pMesh->GetMeshIndex());
 
             m_ManagedInstances.pop();
         }

@@ -21,6 +21,7 @@
 // THE SOFTWARE.
 
 #include <cstring>     // for memset
+#include <new>         // for placement new
 
 #include <ffx_object_management.h>           
 #include <ffx_breadcrumbs_list.h>           

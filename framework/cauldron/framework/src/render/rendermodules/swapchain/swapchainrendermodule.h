@@ -61,7 +61,11 @@ namespace cauldron
         ParameterSet*                   m_pParameters    = nullptr;
         const SwapChainRenderTarget*    m_pRenderTarget  = nullptr;
         const Texture*                  m_pTexture       = nullptr;
+        const Texture*                  m_pSwapChainProxyTexture = nullptr;
+        const Texture*                  m_pHdrTexture    = nullptr;
+        const RasterView*               m_pHdrRasterView = nullptr;
         float                           m_pBackbufferClearColor[4];
+        bool                            m_DebugEnvLogged = false;
     };
 
 } // namespace cauldron

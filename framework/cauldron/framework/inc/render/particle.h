@@ -30,6 +30,7 @@
 #include "render/shaderbuilder.h"
 
 #include <array>
+#include <atomic>
 
 #include <cstring>
 #define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING    // To avoid receiving deprecation error since we are using C++11 only
@@ -147,7 +148,7 @@ namespace cauldron
         std::wstring         m_Name           = L"";
         Vec3                 m_Position       = Vec3(0, 0, 0);
         std::vector<Emitter> m_Emitters       = {};
-        std::atomic_bool     m_RenderReady    = false;
+        std::atomic_bool     m_RenderReady;
 
         const Buffer*  m_pParticleBufferA                  = nullptr;
         const Buffer*  m_pParticleBufferB                  = nullptr;
@@ -176,8 +177,8 @@ namespace cauldron
         float m_FrameTime                 = 0.0f;
 
         friend class ParticleLoader;
-        friend class GPUParticleRenderModule;
-        friend class TranslucencyRenderModule;
+        friend class ::GPUParticleRenderModule;
+        friend class ::TranslucencyRenderModule;
     };
 
 }  // namespace cauldron

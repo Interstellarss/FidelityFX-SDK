@@ -23,9 +23,11 @@
 // Pull in platform versions for actual cauldron type
 #if defined(_WINDOWS)
     #include "core/win/framework_win.h"
+#elif defined(__linux__)
+    #include "core/linux/framework_linux.h"
 #else
     #error Unsupported API or Platform!
-#endif // defined(_WINDOWS)
+#endif
 
 #include "core/components/cameracomponent.h"
 #include "core/components/lightcomponent.h"
@@ -66,10 +68,14 @@
 #include <string>
 #include <cctype>
 #include <time.h>
+#include <cstdlib>
+#include <vector>
 
 #include "renderdoc/include/renderdoc_app.h"
+#if defined(_WIN32)
 #include "pix/pix3.h"
 #define PIX_CAPTURE_PATH L"tempPix.wpix"
+#endif
 
 using namespace std::experimental;
 
@@ -220,6 +226,7 @@ namespace cauldron
         m_ConfigFileName(L"configs/cauldronconfig.json"),
         m_CmdLine(pInitParams->CmdLine)
     {
+        m_Running.store(false);
         CauldronAssert(ASSERT_ERROR, !g_pFrameworkInstance, L"Multiple framework instances being created. Resources will leak.");
         g_pFrameworkInstance = static_cast<Framework*>(this);
 
@@ -265,13 +272,14 @@ namespace cauldron
         // Set width and height accordingly to what's been specified in config/command line
         m_ResolutionInfo = {m_Config.Width, m_Config.Height, m_Config.Width, m_Config.Height, m_Config.Width, m_Config.Height};
 
+#if defined(_WIN)
         // Init RenderDoc
-        if(m_Config.EnableRenderDocCapture)
+        if (m_Config.EnableRenderDocCapture)
         {
             Log::Write(LOGLEVEL_TRACE, L"Initializing RenderDoc.");
             HMODULE mod = ::LoadLibraryW(L"renderdoc.dll");
 
-            if(mod)
+            if (mod)
             {
                 pRENDERDOC_GetAPI RENDERDOC_GetAPI =
                     (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
@@ -281,12 +289,13 @@ namespace cauldron
         }
 
         // Init Pix
-        if(m_Config.EnablePixCapture)
+        if (m_Config.EnablePixCapture)
         {
             Log::Write(LOGLEVEL_TRACE, L"Initializing WinPixGpuCapturer.");
             HMODULE mod = ::LoadLibraryW(L"WinPixGpuCapturer.dll");
             assert(mod);
         }
+#endif
 
         // Initialize the device, resource allocator, and swap chain
         Log::Write(LOGLEVEL_TRACE, L"Initializing graphics device.");
@@ -532,7 +541,11 @@ namespace cauldron
             if (!file)
             {
                 char errmsg[256];
+#if defined(_WIN32)
                 strerror_s(errmsg, 256, errno);
+#else
+                strerror_r(errno, errmsg, sizeof(errmsg));
+#endif
                 Log::Write(LOGLEVEL_FATAL, L"Opening benchmark file failed: %ls", StringToWString(errmsg).c_str());
             }
             bool hasHeader = file.tellp() > std::wofstream::pos_type(0);
@@ -647,7 +660,7 @@ namespace cauldron
                 }
 
                 // Dump the screenshot name associate with this benchmark if we've got one
-                outputData["ScreenshotName"] = m_Config.ScreenShotFileName.empty() ? "" : WStringToString(m_Config.ScreenShotFileName.c_str());
+                outputData["ScreenshotName"] = m_Config.ScreenShotFileName.empty() ? "" : WStringToString(m_Config.ScreenShotFileName.wstring());
 
                 file << StringToWString(outputData.dump());
                 if (m_Config.BenchmarkAppend)
@@ -697,7 +710,7 @@ namespace cauldron
                         file << ',' << GetMs(ps.total) / (double)ps.refinedSize;
 
                     // Dump the screenshot name associate with this benchmark if we've got one
-                    file << ',' << (m_Config.ScreenShotFileName.empty() ? "" : WStringToString(m_Config.ScreenShotFileName.c_str()).c_str());
+                    file << ',' << (m_Config.ScreenShotFileName.empty() ? L"" : m_Config.ScreenShotFileName.wstring());
 
                     file << ',' << m_CmdLine.c_str() << '\n';
                 }
@@ -727,7 +740,7 @@ namespace cauldron
                     }
 
                     // Dump the screenshot name associate with this benchmark if we've got one
-                    file << "ScreenshotName," << (m_Config.ScreenShotFileName.empty() ? "" : WStringToString(m_Config.ScreenShotFileName.c_str())).c_str() << '\n';
+                    file << L"ScreenshotName," << (m_Config.ScreenShotFileName.empty() ? L"" : m_Config.ScreenShotFileName.wstring()) << '\n';
                 }
             }
         }
@@ -761,30 +774,30 @@ namespace cauldron
         if (configData.find("Validation") != configData.end())
         {
             json validationConfig         = configData["Validation"];
-            m_Config.CPUValidationEnabled = validationConfig.value("CpuValidationLayerEnabled", m_Config.CPUValidationEnabled);
-            m_Config.GPUValidationEnabled = validationConfig.value("GpuValidationLayerEnabled", m_Config.GPUValidationEnabled);
+            m_Config.CPUValidationEnabled = validationConfig.value("CpuValidationLayerEnabled", static_cast<bool>(m_Config.CPUValidationEnabled));
+            m_Config.GPUValidationEnabled = validationConfig.value("GpuValidationLayerEnabled", static_cast<bool>(m_Config.GPUValidationEnabled));
         }
 
         // Initialize debug configuration
         if (configData.find("DebugOptions") != configData.end())
         {
             json debugOptionsConfig         = configData["DebugOptions"];
-            m_Config.DeveloperMode          = debugOptionsConfig.value("DevelopmentMode", m_Config.DeveloperMode);
-            m_Config.DebugShaders           = debugOptionsConfig.value("DebugShaders", m_Config.DebugShaders);
-            m_Config.EnableRenderDocCapture = debugOptionsConfig.value("EnableRenderDocCapture", m_Config.EnableRenderDocCapture);
-            m_Config.EnablePixCapture       = debugOptionsConfig.value("EnablePixCapture", m_Config.EnablePixCapture);
+            m_Config.DeveloperMode          = debugOptionsConfig.value("DevelopmentMode", static_cast<bool>(m_Config.DeveloperMode));
+            m_Config.DebugShaders           = debugOptionsConfig.value("DebugShaders", static_cast<bool>(m_Config.DebugShaders));
+            m_Config.EnableRenderDocCapture = debugOptionsConfig.value("EnableRenderDocCapture", static_cast<bool>(m_Config.EnableRenderDocCapture));
+            m_Config.EnablePixCapture       = debugOptionsConfig.value("EnablePixCapture", static_cast<bool>(m_Config.EnablePixCapture));
         }
 
         // Initialize feature support configuration
         if (configData.find("FeatureSupport") != configData.end())
         {
             json featuresConfig     = configData["FeatureSupport"];
-            m_Config.VRSTier1       = featuresConfig.value("VRSTier1", m_Config.VRSTier1);
-            m_Config.VRSTier2       = featuresConfig.value("VRSTier2", m_Config.VRSTier2);
-            m_Config.RT_1_0         = featuresConfig.value("RT1.0", m_Config.RT_1_0);
-            m_Config.RT_1_1         = featuresConfig.value("RT1.1", m_Config.RT_1_1);
-            m_Config.FP16           = featuresConfig.value("FP16", m_Config.FP16);
-            m_Config.ShaderStorageBufferArrayNonUniformIndexing = featuresConfig.value("ShaderStorageBufferArrayNonUniformIndexing", m_Config.ShaderStorageBufferArrayNonUniformIndexing);
+            m_Config.VRSTier1       = featuresConfig.value("VRSTier1", static_cast<bool>(m_Config.VRSTier1));
+            m_Config.VRSTier2       = featuresConfig.value("VRSTier2", static_cast<bool>(m_Config.VRSTier2));
+            m_Config.RT_1_0         = featuresConfig.value("RT1.0", static_cast<bool>(m_Config.RT_1_0));
+            m_Config.RT_1_1         = featuresConfig.value("RT1.1", static_cast<bool>(m_Config.RT_1_1));
+            m_Config.FP16           = featuresConfig.value("FP16", static_cast<bool>(m_Config.FP16));
+            m_Config.ShaderStorageBufferArrayNonUniformIndexing = featuresConfig.value("ShaderStorageBufferArrayNonUniformIndexing", static_cast<bool>(m_Config.ShaderStorageBufferArrayNonUniformIndexing));
             m_Config.MinShaderModel = featuresConfig.value<ShaderModel>("ShaderModel", m_Config.MinShaderModel);
         }
 
@@ -793,8 +806,8 @@ namespace cauldron
         {
             json presentationConfig     = configData["Presentation"];
             m_Config.BackBufferCount    = presentationConfig.value<uint8_t>("BackBufferCount", m_Config.BackBufferCount);
-            m_Config.Vsync              = presentationConfig.value("Vsync", m_Config.Vsync);
-            m_Config.Fullscreen         = presentationConfig.value("Fullscreen", m_Config.Fullscreen);
+            m_Config.Vsync              = presentationConfig.value("Vsync", static_cast<bool>(m_Config.Vsync));
+            m_Config.Fullscreen         = presentationConfig.value("Fullscreen", static_cast<bool>(m_Config.Fullscreen));
             m_Config.Width              = presentationConfig.value<uint32_t>("Width", m_Config.Width);
             m_Config.Height             = presentationConfig.value<uint32_t>("Height", m_Config.Height);
             m_Config.CurrentDisplayMode = presentationConfig.value<DisplayMode>("Mode", m_Config.CurrentDisplayMode);
@@ -819,8 +832,8 @@ namespace cauldron
         if (configData.find("FPSLimiter") != configData.end())
         {
             json limiterConfig = configData["FPSLimiter"];
-            m_Config.LimitFPS = limiterConfig.value("Enable", m_Config.LimitFPS);
-            m_Config.GPULimitFPS = limiterConfig.value("UseGPULimiter", m_Config.GPULimitFPS);
+            m_Config.LimitFPS = limiterConfig.value("Enable", static_cast<bool>(m_Config.LimitFPS));
+            m_Config.GPULimitFPS = limiterConfig.value("UseGPULimiter", static_cast<bool>(m_Config.GPULimitFPS));
             m_Config.LimitedFrameRate = limiterConfig.value("TargetFPS", m_Config.LimitedFrameRate);
         }
 
@@ -862,13 +875,13 @@ namespace cauldron
 
         // Initialize other settings
         m_Config.FontSize              = configData.value("FontSize", m_Config.FontSize);
-        m_Config.AGSEnabled            = configData.value("AGSEnabled", m_Config.AGSEnabled);
-        m_Config.AntiLag2              = configData.value("AntiLag2", m_Config.AntiLag2);
-        m_Config.StablePowerState      = configData.value("StablePowerState", m_Config.StablePowerState);
-        m_Config.InvertedDepth         = configData.value("InvertedDepth", m_Config.InvertedDepth);
-        m_Config.OverrideSceneSamplers = configData.value("OverrideSceneSamplers", m_Config.OverrideSceneSamplers);
-        m_Config.TakeScreenshot        = configData.value("Screenshot", m_Config.TakeScreenshot);
-        m_Config.BuildRayTracingAccelerationStructure = configData.value("BuildRayTracingAccelerationStructure", m_Config.BuildRayTracingAccelerationStructure);
+        m_Config.AGSEnabled            = configData.value("AGSEnabled", static_cast<bool>(m_Config.AGSEnabled));
+        m_Config.AntiLag2              = configData.value("AntiLag2", static_cast<bool>(m_Config.AntiLag2));
+        m_Config.StablePowerState      = configData.value("StablePowerState", static_cast<bool>(m_Config.StablePowerState));
+        m_Config.InvertedDepth         = configData.value("InvertedDepth", static_cast<bool>(m_Config.InvertedDepth));
+        m_Config.OverrideSceneSamplers = configData.value("OverrideSceneSamplers", static_cast<bool>(m_Config.OverrideSceneSamplers));
+        m_Config.TakeScreenshot        = configData.value("Screenshot", static_cast<bool>(m_Config.TakeScreenshot));
+        m_Config.BuildRayTracingAccelerationStructure = configData.value("BuildRayTracingAccelerationStructure", static_cast<bool>(m_Config.BuildRayTracingAccelerationStructure));
 
         // Content initialization
         if (configData.find("Content") != configData.end())
@@ -882,9 +895,10 @@ namespace cauldron
                 {
                     // If we have a valid path to a scene file, queue it up
                     // (Note these scenes can be overridden by passing (a) scene(s) to load on the command line)
-                    filesystem::path sceneFile = filesystem::path(StringToWString(loadingContent["Scenes"][sceneId]));
+                    std::wstring scenePath = StringToWString(loadingContent["Scenes"][sceneId]);
+                    filesystem::path sceneFile = filesystem::path(WStringToString(scenePath));
                     if (filesystem::exists(sceneFile)) {
-                        m_Config.StartupContent.Scenes.push_back(sceneFile);
+                        m_Config.StartupContent.Scenes.push_back(scenePath);
                     }
                 }
             }
@@ -1023,11 +1037,12 @@ namespace cauldron
                     std::string lowerCaseRMConfigName = rmInfo.Name;
                     std::transform(rmInfo.Name.begin(), rmInfo.Name.end(), lowerCaseRMConfigName.begin(), [](unsigned char c) { return std::tolower(c); });
 
-                    const auto configPath = filesystem::path("configs\\rm_configs\\" + lowerCaseRMConfigName + ".json");
+                    const auto configPath = filesystem::path("configs") / "rm_configs" / (lowerCaseRMConfigName + ".json");
                     if (filesystem::exists(configPath))
                     {
                         json rmConfigData;
-                        CauldronAssert(ASSERT_CRITICAL, ParseJsonFile(configPath.c_str(), rmConfigData), L"Could not parse JSON file %ls", rmInfo.Name);
+                        std::wstring configPathWide = StringToWString(configPath.string());
+                        CauldronAssert(ASSERT_CRITICAL, ParseJsonFile(configPathWide.c_str(), rmConfigData), L"Could not parse JSON file %ls", rmInfo.Name);
 
                         // Get the sample configuration
                         json configData = rmConfigData[rmInfo.Name];
@@ -1084,7 +1099,7 @@ namespace cauldron
         if (configData.find("Benchmark") != configData.end())
         {
             json benchmarkConfig     = configData["Benchmark"];
-            m_Config.EnableBenchmark = benchmarkConfig.value("Enabled", m_Config.EnableBenchmark);
+            m_Config.EnableBenchmark = benchmarkConfig.value("Enabled", static_cast<bool>(m_Config.EnableBenchmark));
             m_Config.BenchmarkFrameDuration = benchmarkConfig.value("FrameDuration", m_Config.BenchmarkFrameDuration);
             m_Config.BenchmarkPath = benchmarkConfig.value("Path", m_Config.BenchmarkPath);
             m_Config.BenchmarkDeviationFilterFactor = benchmarkConfig.value("DeviationFilterFactor", m_Config.BenchmarkDeviationFilterFactor);
@@ -1220,11 +1235,13 @@ namespace cauldron
 
         // Add the RuntimeShaderRecompilerRenderModule first so that its button is visible without scrolling.
         // Note that when runtime shader recompile support is disabled then this rendermodule does not draw a UI.
-        RenderModuleInfo runtimeShaderRecompilerInfo = {"RuntimeShaderRecompilerRenderModule", {}};
+        RenderModuleInfo runtimeShaderRecompilerInfo;
+        runtimeShaderRecompilerInfo.Name = "RuntimeShaderRecompilerRenderModule";
         m_Config.RenderModules.push_back(runtimeShaderRecompilerInfo);
 
         // Second RenderModule is the Skinning one
-        RenderModuleInfo csRMInfo = {"SkinningRenderModule", {}};
+        RenderModuleInfo csRMInfo;
+        csRMInfo.Name = "SkinningRenderModule";
         m_Config.RenderModules.push_back(csRMInfo);
 
         // Parse the data for cauldron
@@ -1234,7 +1251,8 @@ namespace cauldron
         ParseSampleConfig();
 
         // Add the RayTracing RenderModule only if is desired by the application
-        RenderModuleInfo rtRMInfo = {"RayTracingRenderModule", {}};
+        RenderModuleInfo rtRMInfo;
+        rtRMInfo.Name = "RayTracingRenderModule";
         if (m_Config.BuildRayTracingAccelerationStructure)
         {
             auto skinningRmIterator = m_Config.RenderModules.begin() + 1;
@@ -1245,9 +1263,12 @@ namespace cauldron
         // Append UI, FPSLimiter, Swap chain render modules which are integral to cauldron's functionality
         // Defining here instead of through config file to make use of numeric_limits to get largest priorities
         // Cauldron's render resources are defined in the config file
-        RenderModuleInfo uiRMInfo        = {"UIRenderModule", {}};
-        RenderModuleInfo fpsLimitRMInfo  = {"FPSLimiterRenderModule", {}};
-        RenderModuleInfo swapChainRMInfo = {"SwapChainRenderModule", {}};
+        RenderModuleInfo uiRMInfo;
+        RenderModuleInfo fpsLimitRMInfo;
+        RenderModuleInfo swapChainRMInfo;
+        uiRMInfo.Name = "UIRenderModule";
+        fpsLimitRMInfo.Name = "FPSLimiterRenderModule";
+        swapChainRMInfo.Name = "SwapChainRenderModule";
         m_Config.RenderModules.push_back(uiRMInfo);
         m_Config.RenderModules.push_back(fpsLimitRMInfo);
         m_Config.RenderModules.push_back(swapChainRMInfo);
@@ -1258,9 +1279,24 @@ namespace cauldron
         Log::Write(LOGLEVEL_TRACE, L"Parsing command line parameters.");
 
         // Process the command line settings
-        LPWSTR* pArgList;
-        int argCount;
-        pArgList = CommandLineToArgvW(cmdLine, &argCount);
+        const wchar_t** pArgList = nullptr;
+        int argCount = 0;
+#if defined(_WIN32)
+        LPWSTR* pArgListWin = CommandLineToArgvW(cmdLine, &argCount);
+        pArgList = const_cast<const wchar_t**>(pArgListWin);
+#else
+        std::vector<std::wstring> argStorage;
+        std::vector<const wchar_t*> argPtrs;
+        std::wistringstream stream(cmdLine ? cmdLine : L"");
+        std::wstring token;
+        while (stream >> token)
+            argStorage.push_back(token);
+        argPtrs.reserve(argStorage.size());
+        for (auto& arg : argStorage)
+            argPtrs.push_back(arg.c_str());
+        pArgList = argPtrs.data();
+        argCount = static_cast<int>(argPtrs.size());
+#endif
 
         std::wstring command;
         for (int currentArg = 0; currentArg < argCount; ++currentArg)
@@ -1620,6 +1656,32 @@ namespace cauldron
     // Handles updating things outside the scope of the calling sample, and calls the sample's main loop function that controls render flow
     void Framework::MainLoop()
     {
+        static bool s_skipParsed = false;
+        static std::vector<std::wstring> s_skipModules;
+        if (!s_skipParsed)
+        {
+            const char* skipEnv = std::getenv("CAULDRON_DEBUG_SKIP_RM");
+            if (skipEnv && *skipEnv)
+            {
+                std::stringstream stream(skipEnv);
+                std::string token;
+                while (std::getline(stream, token, ','))
+                {
+                    size_t start = token.find_first_not_of(" \t");
+                    size_t end = token.find_last_not_of(" \t");
+                    if (start == std::string::npos || end == std::string::npos)
+                        continue;
+                    std::string trimmed = token.substr(start, end - start + 1);
+                    if (!trimmed.empty())
+                        s_skipModules.push_back(StringToWString(trimmed));
+                }
+
+                for (const auto& name : s_skipModules)
+                    CauldronWarning(L"Framework: CAULDRON_DEBUG_SKIP_RM skipping %ls", name.c_str());
+            }
+            s_skipParsed = true;
+        }
+
         // Before doing component/render module updates, offer samples the chance to do any updates
         {
             CPUScopedProfileCapture marker(L"SampleUpdates");
@@ -1681,6 +1743,14 @@ namespace cauldron
                 CPUScopedProfileCapture marker(L"RM Executes");
                 for (auto& callback : m_ExecutionCallbacks)
                 {
+                    if (!s_skipModules.empty())
+                    {
+                        const std::wstring& callbackName = callback.first;
+                        const std::wstring moduleName = callback.second.first ? callback.second.first->GetName() : L"";
+                        if (std::find(s_skipModules.begin(), s_skipModules.end(), callbackName) != s_skipModules.end() ||
+                            (!moduleName.empty() && std::find(s_skipModules.begin(), s_skipModules.end(), moduleName) != s_skipModules.end()))
+                            continue;
+                    }
                     if (callback.second.first->ModuleEnabled() && callback.second.first->ModuleReady())
                     {
                         m_pCmdListForFrame = m_pDevice->CreateCommandList(L"RenderModuleGraphicsCmdList", CommandQueue::Graphics);
@@ -1827,6 +1897,7 @@ namespace cauldron
             m_RenderDocCaptureState = FrameCaptureState::CaptureStarted;
         }
 
+#if defined(_WIN32)
         // Capture Pix
         if(m_PixCaptureState == FrameCaptureState::CaptureRequested)
         {
@@ -1837,6 +1908,7 @@ namespace cauldron
             PIXBeginCapture(PIX_CAPTURE_GPU, &params);
             m_PixCaptureState = FrameCaptureState::CaptureStarted;
         }
+#endif
     }
 
     // Handles all end of frame logic (like present)
@@ -1899,6 +1971,7 @@ namespace cauldron
             m_RenderDocCaptureState = FrameCaptureState::None;
         }
 
+#if defined(_WIN32)
         // Reset the Pix capture
         if(m_PixCaptureState == FrameCaptureState::CaptureStarted)
         {
@@ -1925,6 +1998,7 @@ namespace cauldron
                 }
             }
         }
+#endif
 
         // Stop running if the perf dump timer ran out
         // If no timer is set, the stop time is UINT32_MAX, which should be high enough to not occur with normal operation
@@ -1934,7 +2008,11 @@ namespace cauldron
             m_StopTime = std::chrono::steady_clock::now();
 
             // imitate user closing the window for graceful shutdown
+#if defined(_WIN32)
             PostQuitMessage(0);
+#else
+            m_Running.store(false);
+#endif
         }
     }
 

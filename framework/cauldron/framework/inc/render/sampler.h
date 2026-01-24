@@ -25,6 +25,8 @@
 #include "misc/helpers.h"
 #include "render/renderdefines.h"
 
+#include <cstring>
+
 namespace cauldron
 {
     /// A structure representing a sampler description.
@@ -106,4 +108,3 @@ namespace cauldron
     };
 
 } // namespace cauldron
-

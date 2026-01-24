@@ -118,6 +118,7 @@ struct SceneInformation
     float               Padding[3];
 };
 
+#if __cplusplus
 enum class DisplayMode
 {
     DISPLAYMODE_LDR,
@@ -126,6 +127,14 @@ enum class DisplayMode
     DISPLAYMODE_FSHDR_2084,
     DISPLAYMODE_FSHDR_SCRGB
 };
+#else
+typedef uint DisplayMode;
+static const DisplayMode DISPLAYMODE_LDR = 0;
+static const DisplayMode DISPLAYMODE_HDR10_2084 = 1;
+static const DisplayMode DISPLAYMODE_HDR10_SCRGB = 2;
+static const DisplayMode DISPLAYMODE_FSHDR_2084 = 3;
+static const DisplayMode DISPLAYMODE_FSHDR_SCRGB = 4;
+#endif
 
 struct SwapchainCBData
 {

@@ -25,7 +25,7 @@
 #include "misc/helpers.h"
 #include "render/pipelinedesc.h"
 
-#include <xstring>
+#include <string>
 
 namespace cauldron
 {

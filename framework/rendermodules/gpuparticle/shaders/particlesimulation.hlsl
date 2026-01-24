@@ -222,7 +222,7 @@ void CS_Simulate( uint3 id : SV_DispatchThreadID )
         float2 vsVelocity = mul( g_mView, float4( pb.m_Velocity.xyz, 0 ) ).xy;
         float viewSpaceSpeed = 10 * length( vsVelocity );
         float streakLength = calcEllipsoidRadius( radius, viewSpaceSpeed ).y;
-        pa.m_StreakLengthAndEmitterProperties = PackFloat16( min16float2( streakLength, 0 ) );
+        pa.m_StreakLengthAndEmitterProperties = PackFloat16(float2(streakLength, 0.0f));
         pa.m_StreakLengthAndEmitterProperties |= (0xffff0000 & emitterProperties);
 
         velocityXYEmitterNDotLAndRotation.xy = normalize( vsVelocity );
@@ -283,13 +283,13 @@ void CS_Simulate( uint3 id : SV_DispatchThreadID )
 // Reset 256 particles per thread group, one thread per particle
 // Also adds each particle to the dead list UAV
 [numthreads(256,1,1)]
-void CS_Reset( uint3 id : SV_DispatchThreadID, uint3 globalIdx : SV_DispatchThreadID )
+void CS_Reset( uint3 id : SV_DispatchThreadID )
 {
-    if ( globalIdx.x == 0 )
+    if ( id.x == 0 )
     {
         g_DeadList[ 0 ] = g_MaxParticles;
     }
-    g_DeadList[ globalIdx.x + 1 ] = globalIdx.x;
+    g_DeadList[ id.x + 1 ] = id.x;
 
     g_ParticleBufferA[ id.x ] = (GPUParticlePartA)0;
     g_ParticleBufferB[ id.x ] = (GPUParticlePartB)0;

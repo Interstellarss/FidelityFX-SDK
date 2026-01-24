@@ -50,14 +50,22 @@
 //     https://www.cs.virginia.edu/~jdl/bib/appearance/analytic%20models/schlick94b.pdf
 //
 
+#ifndef MAX_TEXTURES_COUNT
+    #define MAX_TEXTURES_COUNT 1000
+#endif
+#ifndef MAX_SAMPLERS_COUNT
+    #define MAX_SAMPLERS_COUNT 20
+#endif
+
+Texture2D AllTextures[MAX_TEXTURES_COUNT]    : register(t0);
+SamplerState AllSamplers[MAX_SAMPLERS_COUNT] : register(s0);
+
+#define SURFACE_RENDERCOMMON_HAS_TEXTURES 1
 #include "surfacerendercommon.h"
 
 //////////////////////////////////////////////////////////////////////////
 // Resources
 //////////////////////////////////////////////////////////////////////////
-
-Texture2D AllTextures[]    : register(t0);
-SamplerState AllSamplers[] : register(s0);
 
 cbuffer CBSceneInformation : register(b0)
 {
@@ -107,7 +115,7 @@ GBufferOutput MainPS(VS_SURFACE_OUTPUT SurfaceInput
 #endif
     float4 BaseColorAlpha;
     float3 AoRoughnessMetallic;
-    GetPBRParams(SurfaceInput, InstanceInfo.MaterialInfo, BaseColorAlpha, AoRoughnessMetallic, Textures, AllTextures, AllSamplers, SceneInfo.MipLODBias);
+    GetPBRParams(SurfaceInput, InstanceInfo.MaterialInfo, BaseColorAlpha, AoRoughnessMetallic, Textures FFX_RESOURCE_ARGS, SceneInfo.MipLODBias);
 
     DiscardPixelIfAlphaCutOff(BaseColorAlpha.a, InstanceInfo);
 
@@ -134,7 +142,7 @@ GBufferOutput MainPS(VS_SURFACE_OUTPUT SurfaceInput
     GBuffer.AoRoughnessMetallic = float4(AoRoughnessMetallic, 0.f);
     GBuffer.AoRoughnessMetallic.r = 1.0f; // Temp for SSAO
 
-    float3 normals = GetPixelNormal(SurfaceInput, Textures, SceneInfo, AllTextures, AllSamplers, SceneInfo.MipLODBias, isFrontFace);
+    float3 normals = GetPixelNormal(SurfaceInput, Textures, SceneInfo FFX_RESOURCE_ARGS, SceneInfo.MipLODBias, isFrontFace);
     // Compress normal range from [-1, 1] to [0, 1] to fit in unsigned R11G11B10 format
     GBuffer.Normals = float4(CompressNormals(normals), 0.f);
 

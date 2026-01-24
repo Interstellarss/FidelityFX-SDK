@@ -141,7 +141,11 @@ void TranslucencyRenderModule::Init(const json& initData)
         signatureDesc.AddConstantBufferView(0, ShaderBindStage::VertexAndPixel, 1);  // b0
         signatureDesc.AddConstantBufferView(1, ShaderBindStage::VertexAndPixel, 1);
 
-        SamplerDesc samplerDesc = {FilterFunc::MinMagLinearMipPoint, AddressMode::Clamp, AddressMode::Clamp, AddressMode::Clamp};
+        SamplerDesc samplerDesc;
+        samplerDesc.Filter = FilterFunc::MinMagLinearMipPoint;
+        samplerDesc.AddressU = AddressMode::Clamp;
+        samplerDesc.AddressV = AddressMode::Clamp;
+        samplerDesc.AddressW = AddressMode::Clamp;
         signatureDesc.AddStaticSamplers(0, ShaderBindStage::Pixel, 1, &samplerDesc);
 
         m_pParticlesRenderRootSignature = RootSignature::CreateRootSignature(L"ParticleRenderPass_RootSignature", signatureDesc);
@@ -659,14 +663,17 @@ void TranslucencyRenderModule::OnNewContentLoaded(ContentBlock* pContentBlock)
                         }
                     }
 
-                    std::vector<BlendDesc> blendDescs = {{true,
-                                                          Blend::SrcAlpha,
-                                                          Blend::InvSrcAlpha,
-                                                          BlendOp::Add,
-                                                          Blend::InvSrcAlpha,
-                                                          Blend::Zero,
-                                                          BlendOp::Add,
-                                                          static_cast<uint32_t>(ColorWriteMask::All)}};
+                    std::vector<BlendDesc> blendDescs;
+                    BlendDesc blendDesc;
+                    blendDesc.BlendEnabled = true;
+                    blendDesc.SourceBlendColor = Blend::SrcAlpha;
+                    blendDesc.DestBlendColor = Blend::InvSrcAlpha;
+                    blendDesc.ColorOp = BlendOp::Add;
+                    blendDesc.SourceBlendAlpha = Blend::InvSrcAlpha;
+                    blendDesc.DestBlendAlpha = Blend::Zero;
+                    blendDesc.AlphaOp = BlendOp::Add;
+                    blendDesc.RenderTargetWriteMask = static_cast<uint32_t>(ColorWriteMask::All);
+                    blendDescs.push_back(blendDesc);
 
                     // Add additional blends
                     if (m_OptionalTransparencyOptions.OptionalTargets.size())
@@ -702,7 +709,7 @@ void TranslucencyRenderModule::OnNewContentLoaded(ContentBlock* pContentBlock)
                     psoDesc.AddBlendStates(blendDescs, false, true);
 
                     // Setup the shaders to build on the pipeline object
-                    std::wstring shaderPath = L"ParticleRender.hlsl";
+                    std::wstring shaderPath = L"particlerender.hlsl";
                     psoDesc.AddShaderDesc(ShaderBuildDesc::Vertex(shaderPath.c_str(), L"VS_StructuredBuffer", ShaderModel::SM6_0, &defineList));
                     psoDesc.AddShaderDesc(ShaderBuildDesc::Pixel(shaderPath.c_str(), L"PS_Billboard", ShaderModel::SM6_0, &defineList));
 
@@ -900,9 +907,17 @@ uint32_t TranslucencyRenderModule::CreatePipelineObject(const Surface* pSurface)
 
     psoDesc.AddRasterFormats(rtFormats, m_pDepthTarget->GetFormat());
 
-    std::vector<BlendDesc> blendDesc = {
-        {true, Blend::SrcAlpha, Blend::InvSrcAlpha, BlendOp::Add, Blend::One, Blend::Zero, BlendOp::Add, static_cast<uint32_t>(ColorWriteMask::All)}
-    };
+    std::vector<BlendDesc> blendDesc;
+    BlendDesc mainBlendDesc;
+    mainBlendDesc.BlendEnabled = true;
+    mainBlendDesc.SourceBlendColor = Blend::SrcAlpha;
+    mainBlendDesc.DestBlendColor = Blend::InvSrcAlpha;
+    mainBlendDesc.ColorOp = BlendOp::Add;
+    mainBlendDesc.SourceBlendAlpha = Blend::One;
+    mainBlendDesc.DestBlendAlpha = Blend::Zero;
+    mainBlendDesc.AlphaOp = BlendOp::Add;
+    mainBlendDesc.RenderTargetWriteMask = static_cast<uint32_t>(ColorWriteMask::All);
+    blendDesc.push_back(mainBlendDesc);
 
     // Add additional blends
     if (m_OptionalTransparencyOptions.OptionalTargets.size())
@@ -987,7 +1002,9 @@ int32_t TranslucencyRenderModule::AddTexture(const Material* pMaterial, const Te
         }
 
         // Texture wasn't found
-        BoundTexture b = { pTextureInfo->pTexture, 1 };
+        BoundTexture b;
+        b.pTexture = pTextureInfo->pTexture;
+        b.count = 1;
         if (firstFreeIndex < 0)
         {
             m_Textures.push_back(b);

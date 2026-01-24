@@ -89,11 +89,19 @@ bool ffxProvider_FrameGenerationSwapChain_VK::CanProvide(uint64_t type) const
     return (type & FFX_API_EFFECT_MASK) == FFX_API_EFFECT_ID_FGSC_VK;
 }
 
+#ifdef _WIN32
 uint64_t ffxProvider_FrameGenerationSwapChain_VK::GetId() const
 {
     // FG SwapChain VK, version 1.1.3
     return 0xF65D'564B'01'001'003ui64;
 }
+#else
+uint64_t ffxProvider_FrameGenerationSwapChain_VK::GetId() const
+{
+    // Flatten the literal and use a standard 64-bit suffix.
+    return 0xF65D564B01001003ULL;
+}
+#endif
 
 const char* ffxProvider_FrameGenerationSwapChain_VK::GetVersionName() const
 {

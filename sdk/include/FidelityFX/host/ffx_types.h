@@ -97,7 +97,12 @@
 /// Maximum number of characters in a resource name
 ///
 /// @ingroup Defines
+#if defined(_WIN32)
 #define FFX_RESOURCE_NAME_SIZE      64
+#else
+// wchar_t is 4 bytes on Linux; halve the count to keep struct sizes aligned with Windows.
+#define FFX_RESOURCE_NAME_SIZE      32
+#endif
 
 /// Maximum number of queued frames in the backend
 ///
@@ -993,7 +998,7 @@ typedef struct FfxPipelineDescription {
     size_t                              samplerCount;                   ///< Number of samplers to create for the pipeline
     const FfxRootConstantDescription*   rootConstants;                  ///< A collection of root constant descriptions to use when building the root signature for the pipeline
     uint32_t                            rootConstantBufferCount;        ///< Number of root constant buffers to create for the pipeline
-    wchar_t                             name[64];                       ///< Pipeline name with which to name the pipeline object
+    wchar_t                             name[FFX_RESOURCE_NAME_SIZE];   ///< Pipeline name with which to name the pipeline object
     FfxBindStage                        stage;                          ///< The stage(s) for which this pipeline is being built
     uint32_t                            indirectWorkload;               ///< Whether this pipeline has an indirect workload
     FfxSurfaceFormat                    backbufferFormat;               ///< For raster pipelines this contains the backbuffer format

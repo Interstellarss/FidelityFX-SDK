@@ -38,6 +38,7 @@
 #include <ffx_object_management.h>
 
 #include "ffx_frameinterpolation_private.h"
+#include <cstring>
 
 // lists to map shader resource bindpoint name to resource identifier
 typedef struct ResourceBinding
@@ -685,7 +686,9 @@ FfxErrorCode ffxFrameInterpolationContextCreate(FfxFrameInterpolationContext* co
     }
 
     // ensure the context is large enough for the internal context.
+#if defined(_WIN32)
     FFX_STATIC_ASSERT(sizeof(FfxFrameInterpolationContext) >= sizeof(FfxFrameInterpolationContext_Private));
+#endif
 
     // create the context.
     FfxFrameInterpolationContext_Private* contextPrivate = (FfxFrameInterpolationContext_Private*)(context);

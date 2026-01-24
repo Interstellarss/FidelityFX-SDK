@@ -22,14 +22,16 @@
 
 #pragma once
 
-
 #if defined(_WINDOWS)
     #include <windows.h>
 #else
     #include <codecvt>
     #include <locale>
+    #include <cstdint>
+    using UINT = uint32_t;
 #endif  // #if defined(_WINDOWS)
 #include <cmath>
+#include <limits>
 #include <string>
 
 /// @defgroup CauldronHelpers Helpers
@@ -168,4 +170,3 @@ inline uint8_t CountBitsSet(uint32_t val) noexcept
     return static_cast<uint8_t>(((c >> 16) + c) & 0x0000FFFF);
 #endif
 }
-

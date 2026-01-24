@@ -23,6 +23,12 @@
 #pragma once
 
 #include "compiler.h"
+#include <string>       // For std::string
+#include <vector>       // For std::vector
+#include <unordered_set> // For std::unordered_set
+#include <mutex>        // For std::mutex
+#include <cstdio>       // For FILE
+#include <cstdint>      // For uint8_t
 
 
 /// The GLSL (GSLang) specialization of <c><i>IShaderBinary</i></c> interface.

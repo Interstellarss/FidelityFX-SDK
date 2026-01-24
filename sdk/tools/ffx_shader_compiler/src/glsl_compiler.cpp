@@ -25,6 +25,14 @@
 
 #include <md5.h>
 #include <spirv_reflect.h>
+#include <process.hpp>
+#include <string>           // For std::string
+#include <vector>           // For std::vector
+#include <sstream>          // For std::stringstream
+#include <fstream>          // For std::ifstream
+#include <cassert>          // For assert
+#include <filesystem>       // For std::filesystem
+namespace fs = std::filesystem;
 
 std::string MD5HashString(unsigned char* sig)
 {
@@ -74,7 +82,11 @@ GLSLCompiler::GLSLCompiler(const std::string& glslangExe,
                            bool               disableLogs,
                            bool               debugCompile)
     : ICompiler(shaderPath, shaderName, shaderFileName, outputPath, disableLogs, debugCompile)
+#ifdef _WIN32
     , m_GlslangExe(glslangExe.empty() ? "glslangValidator.exe" : glslangExe)
+#else
+    , m_GlslangExe(glslangExe.empty() ? "glslangValidator" : glslangExe)
+#endif
 {
     fs::create_directory(m_OutputPath + "/" + m_ShaderName + "_temp");
 }
@@ -157,7 +169,7 @@ static void CollectDependencies(const std::string& shaderPath, const std::vector
     }
 }
 
-bool GLSLCompiler::GLSLCompiler::Compile(Permutation& permutation, const std::vector<std::string>& arguments, std::mutex& writeMutex)
+bool GLSLCompiler::Compile(Permutation& permutation, const std::vector<std::string>& arguments, std::mutex& writeMutex)
 {
     GLSLShaderBinary* glslShaderBinary = new GLSLShaderBinary();
 
@@ -257,7 +269,7 @@ bool GLSLCompiler::GLSLCompiler::Compile(Permutation& permutation, const std::ve
         }
     };
 
-    tpl::Process process(cmdLine, "", func, func);
+    TinyProcessLib::Process process(cmdLine, "", func, func);
 
     bool succeeded = process.get_exit_status() == 0;
 

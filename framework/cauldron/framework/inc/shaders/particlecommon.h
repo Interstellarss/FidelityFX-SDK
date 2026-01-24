@@ -118,36 +118,36 @@ min16float RTGDot4(min16float4 a, min16float4 b)
 // length
 min16float RTGLength2(min16float2 a)
 {
-    return sqrt(RTGDot2(a, a));
+    return min16float(sqrt(float(RTGDot2(a, a))));
 }
 
 min16float RTGLength3(min16float3 a)
 {
-    return sqrt(RTGDot3(a, a));
+    return min16float(sqrt(float(RTGDot3(a, a))));
 }
 
 min16float RTGLength4(min16float4 a)
 {
-    return sqrt(RTGDot4(a, a));
+    return min16float(sqrt(float(RTGDot4(a, a))));
 }
 
 // normalize
 min16float2 RTGNormalize2(min16float2 a)
 {
     min16float l = RTGLength2(a);
-    return l == 0.0 ? a : a / l;
+    return l == min16float(0.0) ? a : a / l;
 }
 
 min16float3 RTGNormalize3(min16float3 a)
 {
     min16float l = RTGLength3(a);
-    return l == 0.0 ? a : a / l;
+    return l == min16float(0.0) ? a : a / l;
 }
 
 min16float4 RTGNormalize4(min16float4 a)
 {
     min16float l = RTGLength4(a);
-    return l == 0.0 ? a : a / l;
+    return l == min16float(0.0) ? a : a / l;
 }
 
 // distance
@@ -172,24 +172,26 @@ int PackInt16(min16int2 v)
 {
     uint x = asuint(int(v.x));
     uint y = asuint(int(v.y));
-    return asint(x | y << 16);
+    return asint(x | (y << 16));
 }
 
 uint PackInt16(min16uint2 v)
 {
-    return uint(v.x | (uint)(v.y) << 16);
+    uint x = uint(v.x);
+    uint y = uint(v.y);
+    return x | (y << 16);
 }
 
 min16int2 UnpackInt16(int v)
 {
-    uint x = asuint(v.x) & 0xFFFF;
-    uint y = asuint(v.x) >> 16;
-    return min16uint2(asint(x), asint(y));
+    uint x = asuint(v) & 0xFFFF;
+    uint y = asuint(v) >> 16;
+    return min16int2(asint(x), asint(y));
 }
 
 min16uint2 UnpackInt16(uint v)
 {
-    return min16uint2(v.x & 0xFFFF, v.x >> 16);
+    return min16uint2(v & 0xFFFF, v >> 16);
 }
 
 // min16{u}int4
@@ -215,14 +217,19 @@ min16uint4 UnpackInt16(uint2 v)
 
 uint PackFloat16(min16float v)
 {
-    uint p = f32tof16(v);
-    return p.x;
+    return f32tof16(float(v));
 }
 
 // min16float2
 uint PackFloat16(min16float2 v)
 {
     uint2 p = f32tof16(float2(v));
+    return p.x | (p.y << 16);
+}
+
+uint PackFloat16(float2 v)
+{
+    uint2 p = f32tof16(v);
     return p.x | (p.y << 16);
 }
 

@@ -190,7 +190,13 @@ void SkinningRenderModule::OnNewContentLoaded(ContentBlock* pContentBlock)
                             parameterSet->SetBufferUAV(data->m_skinnedPreviousPosition[surfaceID].pBuffer, 1);
                             parameterSet->SetBufferUAV(data->m_skinnedNormals[surfaceID].pBuffer, 2);
 
-                            m_SkinningBlobs.push_back({data, pSurface, &skinningMatrices, parameterSet, vertexStrides});
+                            SkinningBlob blob;
+                            blob.pAnimationComponentData = data;
+                            blob.pSurface = pSurface;
+                            blob.SkinningMatrices = &skinningMatrices;
+                            blob.pParameters = parameterSet;
+                            blob.vertexStrides = vertexStrides;
+                            m_SkinningBlobs.push_back(blob);
                         }
                     }
                 }

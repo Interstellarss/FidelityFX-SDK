@@ -32,7 +32,9 @@ SamplerState           samPrefilteredCube : register(s4);
 SamplerComparisonState SamShadow : register(s5);
 SamplerState           g_samplers[] : DECLARE_SAMPLER(SAMPLER_BEGIN_SLOT);
 
+#if defined(USE_INLINE_RAYTRACING) && !defined(FFX_GLSLC)
 RaytracingAccelerationStructure g_global : register(t0);
+#endif
 
 Texture2D<float4>   g_brdf_lut : register(t1);
 TextureCube<float4> g_atmosphere_lut : register(t2);
@@ -215,21 +217,21 @@ RayGbuffer UnpackGbuffer(PackedRayGbuffer gbuffer)
 void SkipRayGBuffer(uint ray_index)
 {
     uint pack1 = (1u << 31u);
-    g_rw_ray_gbuffer_list.Store<uint>(ray_index * 12 + 4, pack1);
+    g_rw_ray_gbuffer_list.Store(ray_index * 12 + 4, pack1);
 }
 
 void StoreRayGBuffer(uint ray_index, in PackedRayGbuffer gbuffer)
 {
-    g_rw_ray_gbuffer_list.Store<uint>(ray_index * 12 + 0, gbuffer.pack0);
-    g_rw_ray_gbuffer_list.Store<uint>(ray_index * 12 + 4, gbuffer.pack1);
-    g_rw_ray_gbuffer_list.Store<uint>(ray_index * 12 + 8, gbuffer.pack2);
+    g_rw_ray_gbuffer_list.Store(ray_index * 12 + 0, gbuffer.pack0);
+    g_rw_ray_gbuffer_list.Store(ray_index * 12 + 4, gbuffer.pack1);
+    g_rw_ray_gbuffer_list.Store(ray_index * 12 + 8, gbuffer.pack2);
 }
 
 PackedRayGbuffer LoadRayGBuffer(uint ray_index)
 {
-    uint             pack0 = g_rw_ray_gbuffer_list.Load<uint>(ray_index * 12 + 0);
-    uint             pack1 = g_rw_ray_gbuffer_list.Load<uint>(ray_index * 12 + 4);
-    uint             pack2 = g_rw_ray_gbuffer_list.Load<uint>(ray_index * 12 + 8);
+    uint             pack0 = g_rw_ray_gbuffer_list.Load(ray_index * 12 + 0);
+    uint             pack1 = g_rw_ray_gbuffer_list.Load(ray_index * 12 + 4);
+    uint             pack2 = g_rw_ray_gbuffer_list.Load(ray_index * 12 + 8);
     PackedRayGbuffer pack  = {pack0, pack1, pack2};
     return pack;
 }
@@ -278,9 +280,9 @@ void WriteRadiance(uint packed_coords, float4 radiance)
     //////////////////////////////////////////
     uint ray_index = group_id * 32 + group_index;
 #ifdef USE_DEFERRED_RAYTRACING
-    uint packed_coords = g_rw_hw_ray_list.Load(sizeof(uint) * ray_index);
+    uint packed_coords = g_rw_hw_ray_list.Load(4u * ray_index);
 #else   // USE_DEFERRED_RAYTRACING
-    uint packed_coords = g_rw_ray_list.Load(sizeof(uint) * ray_index);
+    uint packed_coords = g_rw_ray_list.Load(4u * ray_index);
 #endif  // USE_DEFERRED_RAYTRACING
     int2 coords;
     {
@@ -475,7 +477,7 @@ void WriteRadiance(uint packed_coords, float4 radiance)
         //////////////////////////////////////////
         ///////////  HW Ray Tracing  /////////////
         //////////////////////////////////////////
-#ifdef USE_INLINE_RAYTRACING
+#if defined(USE_INLINE_RAYTRACING) && !defined(FFX_GLSLC)
     float3 world_space_origin;
     float3 world_space_reflected_direction;
 
@@ -733,7 +735,7 @@ void WriteRadiance(uint packed_coords, float4 radiance)
                                               : SV_GroupID)
 {
     uint ray_index     = group_id * 32 + group_index;
-    uint packed_coords = g_rw_hw_ray_list.Load(sizeof(uint) * ray_index);
+    uint packed_coords = g_rw_hw_ray_list.Load(4u * ray_index);
     int2 coords;
     bool copy_horizontal;
     bool copy_vertical;

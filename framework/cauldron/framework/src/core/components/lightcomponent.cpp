@@ -29,6 +29,7 @@
 #include "misc/math.h"
 
 #include <algorithm>
+#include <cfloat>
 
 namespace cauldron
 {
@@ -425,8 +426,8 @@ namespace cauldron
             Vec4 frustumPoints[8];
             CreateFrustumPointsFromCascadeInterval(camNear, frustumIntervalBegin, frustumIntervalEnd, cameraProjectionMatrix, frustumPoints);
 
-            lightCameraOrthographicMin = {FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX};
-            lightCameraOrthographicMax = {-FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX};
+            lightCameraOrthographicMin = Vec4(FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX);
+            lightCameraOrthographicMax = Vec4(-FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX);
 
             // Lets get bounding box of frustum after translating it into light view space
             Vec4 tempTranslatedCornerPoint;

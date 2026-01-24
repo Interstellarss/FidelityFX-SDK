@@ -23,25 +23,33 @@
 #ifndef BRIXELIZER_EXAMPLE_TYPES_H
 #define BRIXELIZER_EXAMPLE_TYPES_H
 
-enum BrixelizerExampleFlags {
-	BRIXELIZER_EXAMPLE_SHOW_BRICK_OUTLINES = 1 << 0,
-};
-
 #ifdef __cplusplus
-	#define ENUM_WIDTH : int32_t
+enum BrixelizerExampleFlags {
+    BRIXELIZER_EXAMPLE_SHOW_BRICK_OUTLINES = 1 << 0,
+};
 #else
-	#define ENUM_WIDTH
+#define BRIXELIZER_EXAMPLE_SHOW_BRICK_OUTLINES (1u << 0)
 #endif
 
-#define BRIXELIZER_EXAMPLE_OUTPUT_TYPES OT(DISTANCE) OT(UVW) OT(ITERATIONS) OT(GRADIENT) OT(BRICK_ID)
-enum BrixelizerExampleOutputType ENUM_WIDTH
+#define BRIXELIZER_EXAMPLE_OUTPUT_TYPES \
+    OT(DISTANCE, 0) \
+    OT(UVW, 1) \
+    OT(ITERATIONS, 2) \
+    OT(GRADIENT, 3) \
+    OT(BRICK_ID, 4)
+
+#ifdef __cplusplus
+enum BrixelizerExampleOutputType : int32_t
 {
-#define OT(name) BRIXELIZER_EXAMPLE_OUTPUT_TYPE_##name,
-	BRIXELIZER_EXAMPLE_OUTPUT_TYPES
+#define OT(name, value) BRIXELIZER_EXAMPLE_OUTPUT_TYPE_##name = value,
+    BRIXELIZER_EXAMPLE_OUTPUT_TYPES
 #undef OT
 };
-
-#undef ENUM_WIDTH
+#else
+#define OT(name, value) static const uint BRIXELIZER_EXAMPLE_OUTPUT_TYPE_##name = value;
+BRIXELIZER_EXAMPLE_OUTPUT_TYPES
+#undef OT
+#endif
 
 struct BrixelizerExampleConstants
 {

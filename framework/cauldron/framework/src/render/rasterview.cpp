@@ -70,9 +70,9 @@ namespace cauldron
     RasterViewAllocator::~RasterViewAllocator()
     {
         // Release all raster views
-        for (auto& resourceItr = m_AllocatedRasterViews.begin(); resourceItr != m_AllocatedRasterViews.end(); ++resourceItr)
+        for (auto resourceItr = m_AllocatedRasterViews.begin(); resourceItr != m_AllocatedRasterViews.end(); ++resourceItr)
         {
-            for (auto& rasterViewItr = resourceItr->second.begin(); rasterViewItr != resourceItr->second.end(); ++rasterViewItr)
+            for (auto rasterViewItr = resourceItr->second.begin(); rasterViewItr != resourceItr->second.end(); ++rasterViewItr)
                 delete (*rasterViewItr);
             resourceItr->second.clear();
         }
@@ -92,7 +92,7 @@ namespace cauldron
 
             // Find the list of raster views for this resource
             bool foundResource = false;
-            for (auto& resourceItr = m_AllocatedRasterViews.begin(); resourceItr != m_AllocatedRasterViews.end(); ++resourceItr)
+            for (auto resourceItr = m_AllocatedRasterViews.begin(); resourceItr != m_AllocatedRasterViews.end(); ++resourceItr)
             {
                 if (resourceItr->first == pTex)
                 {
@@ -117,13 +117,13 @@ namespace cauldron
     void RasterViewAllocator::OnResourceResized()
     {
         // Rebind all the views for the new resources created due to resize
-        for (auto& resourceItr = m_AllocatedRasterViews.begin(); resourceItr != m_AllocatedRasterViews.end(); ++resourceItr)
+        for (auto resourceItr = m_AllocatedRasterViews.begin(); resourceItr != m_AllocatedRasterViews.end(); ++resourceItr)
         {
             // Swap chain handles itself
             if (resourceItr->first->IsSwapChain() || !resourceItr->first->GetResource()->IsResizable())
                 continue;
 
-            for (auto& rasterViewItr = resourceItr->second.begin(); rasterViewItr != resourceItr->second.end(); ++rasterViewItr)
+            for (auto rasterViewItr = resourceItr->second.begin(); rasterViewItr != resourceItr->second.end(); ++rasterViewItr)
             {
                 RasterView* pRasterView = *rasterViewItr;
                 ResourceViewType viewType = static_cast<bool>(pRasterView->m_pTexture->GetDesc().Flags & ResourceFlags::AllowDepthStencil) ? ResourceViewType::DSV : ResourceViewType::RTV;
@@ -136,7 +136,7 @@ namespace cauldron
     RasterView* RasterViewAllocator::FindRasterView(const Texture* pTex, ViewDimension dimension, int32_t mip, int32_t arraySize, int32_t firstArraySlice)
     {
         // First find the resource
-        for (auto& resourceItr = m_AllocatedRasterViews.begin(); resourceItr != m_AllocatedRasterViews.end(); ++resourceItr)
+        for (auto resourceItr = m_AllocatedRasterViews.begin(); resourceItr != m_AllocatedRasterViews.end(); ++resourceItr)
         {
             if (resourceItr->first == pTex)
             {
@@ -144,7 +144,7 @@ namespace cauldron
                 if (resourceItr->first->IsSwapChain())
                     return resourceItr->second.at(0);
 
-                for (auto& rasterViewItr = resourceItr->second.begin(); rasterViewItr != resourceItr->second.end(); ++rasterViewItr)
+                for (auto rasterViewItr = resourceItr->second.begin(); rasterViewItr != resourceItr->second.end(); ++rasterViewItr)
                 {
                     if ((*rasterViewItr)->m_Dimension == dimension && (*rasterViewItr)->m_Mip == mip &&
                         (*rasterViewItr)->m_ArraySize == arraySize && (*rasterViewItr)->m_FirstArraySlice == firstArraySlice)

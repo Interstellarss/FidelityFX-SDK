@@ -23,6 +23,7 @@
 #include <string.h>     // for memset
 #include <stdlib.h>     // for _countof
 #include <cmath>        // for fabs, abs, sinf, sqrt, etc.
+#include <stdio.h>      // for printf debugging
 
 #include <FidelityFX/host/ffx_denoiser.h>
 #include <FidelityFX/gpu/denoiser/ffx_denoiser_resources.h>
@@ -833,7 +834,7 @@ static FfxErrorCode denoiserShadowsCreateResources(FfxDenoiserContext_Private* c
                                                                    L"DenoiserShadows_Moments0",
                                                                    FFX_RESOURCE_TYPE_TEXTURE2D,
                                                                    FFX_RESOURCE_USAGE_UAV,
-                                                                   FFX_SURFACE_FORMAT_R11G11B10_FLOAT,
+                                                                   FFX_SURFACE_FORMAT_R32G32B32A32_FLOAT,
                                                                    contextDescription->windowSize.width,
                                                                    contextDescription->windowSize.height,
                                                                    1,
@@ -844,7 +845,7 @@ static FfxErrorCode denoiserShadowsCreateResources(FfxDenoiserContext_Private* c
                                                                    L"DenoiserShadows_Moments1",
                                                                    FFX_RESOURCE_TYPE_TEXTURE2D,
                                                                    FFX_RESOURCE_USAGE_UAV,
-                                                                   FFX_SURFACE_FORMAT_R11G11B10_FLOAT,
+                                                                   FFX_SURFACE_FORMAT_R32G32B32A32_FLOAT,
                                                                    contextDescription->windowSize.width,
                                                                    contextDescription->windowSize.height,
                                                                    1,
@@ -855,7 +856,7 @@ static FfxErrorCode denoiserShadowsCreateResources(FfxDenoiserContext_Private* c
                                                                    L"DenoiserShadows_Scratch0",
                                                                    FFX_RESOURCE_TYPE_TEXTURE2D,
                                                                    FFX_RESOURCE_USAGE_UAV,
-                                                                   FFX_SURFACE_FORMAT_R16G16_FLOAT,
+                                                                   FFX_SURFACE_FORMAT_R32G32_FLOAT,
                                                                    contextDescription->windowSize.width,
                                                                    contextDescription->windowSize.height,
                                                                    1,
@@ -866,7 +867,7 @@ static FfxErrorCode denoiserShadowsCreateResources(FfxDenoiserContext_Private* c
                                                                    L"DenoiserShadows_Scratch1",
                                                                    FFX_RESOURCE_TYPE_TEXTURE2D,
                                                                    FFX_RESOURCE_USAGE_UAV,
-                                                                   FFX_SURFACE_FORMAT_R16G16_FLOAT,
+                                                                   FFX_SURFACE_FORMAT_R32G32_FLOAT,
                                                                    contextDescription->windowSize.width,
                                                                    contextDescription->windowSize.height,
                                                                    1,
@@ -1039,40 +1040,109 @@ static FfxErrorCode denoiserCreate(FfxDenoiserContext_Private* context, const Ff
 
     // Check version info - make sure we are linked with the right backend version
     FfxVersionNumber version = context->contextDescription.backendInterface.fpGetSDKVersion(&context->contextDescription.backendInterface);
-    FFX_RETURN_ON_ERROR(version == FFX_SDK_MAKE_VERSION(1, 1, 4), FFX_ERROR_INVALID_VERSION);
+    printf("[FFX-DENOISER] denoiserCreate: backend SDK version=0x%x expected=0x%x\n",
+           version,
+           FFX_SDK_MAKE_VERSION(1, 1, 4));
+    fflush(stdout);
+    if (version != FFX_SDK_MAKE_VERSION(1, 1, 4)) {
+        printf("[FFX-DENOISER] ERROR: invalid backend version\n");
+        fflush(stdout);
+        return FFX_ERROR_INVALID_VERSION;
+    }
 
     // Create the device.
     FfxErrorCode errorCode =
         context->contextDescription.backendInterface.fpCreateBackendContext(&context->contextDescription.backendInterface, FFX_EFFECT_DENOISER, nullptr, &context->effectContextId);
-    FFX_RETURN_ON_ERROR(errorCode == FFX_OK, errorCode);
+    printf("[FFX-DENOISER] fpCreateBackendContext(effect=FFX_EFFECT_DENOISER) => %d (effectContextId=%u)\n",
+           errorCode,
+           context->effectContextId);
+    fflush(stdout);
+    if (errorCode != FFX_OK) {
+        printf("[FFX-DENOISER] fpCreateBackendContext failed with FfxErrorCode=%d\n", errorCode);
+        fflush(stdout);
+        return errorCode;
+    }
 
     // Call out for device caps.
     errorCode = context->contextDescription.backendInterface.fpGetDeviceCapabilities(&context->contextDescription.backendInterface, &context->deviceCapabilities);
-    FFX_RETURN_ON_ERROR(errorCode == FFX_OK, errorCode);
+    printf("[FFX-DENOISER] fpGetDeviceCapabilities => %d\n", errorCode);
+    if (errorCode == FFX_OK) {
+        printf("[FFX-DENOISER] Device caps: shaderModel=%d waveLaneMin=%u waveLaneMax=%u fp16=%d raytracing=%d coherentMem=%d dedicatedAlloc=%d bufferMarker=%d sync2=%d ssboNonUniform=%d\n",
+               context->deviceCapabilities.maximumSupportedShaderModel,
+               context->deviceCapabilities.waveLaneCountMin,
+               context->deviceCapabilities.waveLaneCountMax,
+               (int)context->deviceCapabilities.fp16Supported,
+               (int)context->deviceCapabilities.raytracingSupported,
+               (int)context->deviceCapabilities.deviceCoherentMemorySupported,
+               (int)context->deviceCapabilities.dedicatedAllocationSupported,
+               (int)context->deviceCapabilities.bufferMarkerSupported,
+               (int)context->deviceCapabilities.extendedSynchronizationSupported,
+               (int)context->deviceCapabilities.shaderStorageBufferArrayNonUniformIndexing);
+    }
+    fflush(stdout);
+    if (errorCode != FFX_OK) {
+        printf("[FFX-DENOISER] fpGetDeviceCapabilities failed with FfxErrorCode=%d\n", errorCode);
+        fflush(stdout);
+        return errorCode;
+    }
 
     // Create internal resources.
-    if(contextDescription->flags & FFX_DENOISER_SHADOWS){
+    if (contextDescription->flags & FFX_DENOISER_SHADOWS) {
+        printf("[FFX-DENOISER] Creating SHADOWS resources, windowSize=%ux%u\n",
+               contextDescription->windowSize.width,
+               contextDescription->windowSize.height);
+        fflush(stdout);
         context->shadowsConstants[0].num32BitEntries = DENOISER_SHADOWS_CONSTANT_BUFFER_0_SIZE;
         context->shadowsConstants[1].num32BitEntries = DENOISER_SHADOWS_CONSTANT_BUFFER_1_SIZE;
         context->shadowsConstants[2].num32BitEntries = DENOISER_SHADOWS_CONSTANT_BUFFER_2_SIZE;
 
         errorCode = denoiserShadowsCreateResources(context, contextDescription);
-        FFX_RETURN_ON_ERROR(errorCode == FFX_OK, errorCode);
+        printf("[FFX-DENOISER] denoiserShadowsCreateResources => %d\n", errorCode);
+        fflush(stdout);
+        if (errorCode != FFX_OK) {
+            printf("[FFX-DENOISER] ERROR: denoiserShadowsCreateResources failed\n");
+            fflush(stdout);
+            return errorCode;
+        }
 
         // Create shaders on initialize.
         errorCode = createShadowsPipelineStates(context);
-        FFX_RETURN_ON_ERROR(errorCode == FFX_OK, errorCode);
+        printf("[FFX-DENOISER] createShadowsPipelineStates => %d\n", errorCode);
+        fflush(stdout);
+        if (errorCode != FFX_OK) {
+            printf("[FFX-DENOISER] ERROR: createShadowsPipelineStates failed\n");
+            fflush(stdout);
+            return errorCode;
+        }
     }
-    if(contextDescription->flags & FFX_DENOISER_REFLECTIONS){
+    if (contextDescription->flags & FFX_DENOISER_REFLECTIONS) {
+        printf("[FFX-DENOISER] Creating REFLECTIONS resources, windowSize=%ux%u\n",
+               contextDescription->windowSize.width,
+               contextDescription->windowSize.height);
+        fflush(stdout);
         context->reflectionsConstants[FFX_DENOISER_REFLECTIONS_CONSTANTBUFFER_IDENTIFIER].num32BitEntries = sizeof(DenoiserReflectionsConstants) / sizeof(uint32_t);
         errorCode = denoiserReflectionsCreateResources(context, contextDescription);
-        FFX_RETURN_ON_ERROR(errorCode == FFX_OK, errorCode);
+        printf("[FFX-DENOISER] denoiserReflectionsCreateResources => %d\n", errorCode);
+        fflush(stdout);
+        if (errorCode != FFX_OK) {
+            printf("[FFX-DENOISER] ERROR: denoiserReflectionsCreateResources failed\n");
+            fflush(stdout);
+            return errorCode;
+        }
 
         // Create shaders on initialize.
         errorCode = createReflectionsPipelineStates(context);
-        FFX_RETURN_ON_ERROR(errorCode == FFX_OK, errorCode);
+        printf("[FFX-DENOISER] createReflectionsPipelineStates => %d\n", errorCode);
+        fflush(stdout);
+        if (errorCode != FFX_OK) {
+            printf("[FFX-DENOISER] ERROR: createReflectionsPipelineStates failed\n");
+            fflush(stdout);
+            return errorCode;
+        }
     }
 
+    printf("[FFX-DENOISER] denoiserCreate completed successfully\n");
+    fflush(stdout);
     return FFX_OK;
 }
 
@@ -1161,7 +1231,9 @@ FfxErrorCode ffxDenoiserContextCreate(FfxDenoiserContext* context, const FfxDeno
     }
     
     // Ensure the context is large enough for the internal context.
+#if defined(_WIN32)
     FFX_STATIC_ASSERT(sizeof(FfxDenoiserContext) >= sizeof(FfxDenoiserContext_Private));
+#endif
 
     // create the context.
     FfxDenoiserContext_Private* contextPrivate = (FfxDenoiserContext_Private*)(context);

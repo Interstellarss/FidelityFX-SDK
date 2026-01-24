@@ -36,6 +36,7 @@
 #include <mutex>
 #include <unordered_set>
 #include <vector>
+#include <atomic>
 
 namespace cauldron
 {
@@ -218,8 +219,8 @@ namespace cauldron
         std::map<std::wstring, Content*>    m_LoadedContentBlocks;
         std::vector<Content*>               m_ContentToUnload;
 
-        std::atomic_uint32_t                m_ActiveContentLoads = 0;
-        std::atomic_uint32_t                m_ActiveTextureLoads = 0;
+        std::atomic_uint32_t                m_ActiveContentLoads;
+        std::atomic_uint32_t                m_ActiveTextureLoads;
 
         std::unordered_set<ContentListener*> m_ContentListeners;
     };

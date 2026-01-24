@@ -32,7 +32,11 @@
 #include "helpers.h"
 
 // Sharing dxc for compilation
-#include "dxc/inc/dxcapi.h"
+#if defined(_WIN)
+    #include "dxc/inc/dxcapi.h"
+#else
+    #include "render/dxc_stub.h"
+#endif
 
 #include <algorithm>
 #include <array>

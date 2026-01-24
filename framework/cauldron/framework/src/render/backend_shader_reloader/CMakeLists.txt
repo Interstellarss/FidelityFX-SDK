@@ -32,10 +32,16 @@ file(GLOB BACKEND_SOURCES
 	"${CMAKE_CURRENT_SOURCE_DIR}/native_backend_shader_reloader.cpp"
 	"${CMAKE_CURRENT_SOURCE_DIR}/native_backend_shader_reloader.h")
 
-add_library(backend_shader_reloader_impl STATIC ${LOADER_SOURCES} ${COMPONENT_SOURCES} ${BACKEND_SOURCES})
+if (WIN32)
+	add_library(backend_shader_reloader_impl STATIC ${LOADER_SOURCES} ${COMPONENT_SOURCES} ${BACKEND_SOURCES})
+else()
+	add_library(backend_shader_reloader_impl INTERFACE)
+endif()
 add_library(backend_shader_reloader_stub STATIC ${LOADER_SOURCES} ${COMPONENT_SOURCES} ${BACKEND_SOURCES})
 
-target_compile_definitions(backend_shader_reloader_impl PRIVATE FFX_SDK_ROOT=\"${CMAKE_SOURCE_DIR}\" FFX_SDK_BUILD_ROOT=\"${CMAKE_BINARY_DIR}\")
+if (WIN32)
+	target_compile_definitions(backend_shader_reloader_impl PRIVATE FFX_SDK_ROOT=\"${CMAKE_SOURCE_DIR}\" FFX_SDK_BUILD_ROOT=\"${CMAKE_BINARY_DIR}\")
+endif()
 target_compile_definitions(backend_shader_reloader_stub PRIVATE FFX_SDK_ROOT=\"${CMAKE_SOURCE_DIR}\" FFX_SDK_BUILD_ROOT=\"${CMAKE_BINARY_DIR}\")
 
 if(CMAKE_GENERATOR_PLATFORM STREQUAL "x64" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:x64")
@@ -46,15 +52,23 @@ elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64" OR CMAKE_EXE_LINKER_FLAGS STREQ
     set(FFX_PLATFORM_NAME ARM64)
 elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64EC" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:ARM64EC")
     set(FFX_PLATFORM_NAME ARM64EC)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(FFX_PLATFORM_NAME x64)
 else()
     message(FATAL_ERROR "Unsupported target platform \"${CMAKE_GENERATOR_PLATFORM}\"")
 endif()
 
-target_compile_definitions(backend_shader_reloader_impl PRIVATE FFX_PLATFORM_NAME=\"${FFX_PLATFORM_NAME}\")
+if (WIN32)
+	target_compile_definitions(backend_shader_reloader_impl PRIVATE FFX_PLATFORM_NAME=\"${FFX_PLATFORM_NAME}\")
+endif()
 target_compile_definitions(backend_shader_reloader_stub PRIVATE FFX_PLATFORM_NAME=\"${FFX_PLATFORM_NAME}\")
 
-target_compile_definitions(backend_shader_reloader_impl PRIVATE SUPPORT_RUNTIME_SHADER_RECOMPILE=1)
+if (WIN32)
+	target_compile_definitions(backend_shader_reloader_impl PRIVATE SUPPORT_RUNTIME_SHADER_RECOMPILE=1)
+endif()
 target_compile_definitions(backend_shader_reloader_stub PRIVATE SUPPORT_RUNTIME_SHADER_RECOMPILE=0)
 
-target_include_directories(backend_shader_reloader_impl PUBLIC ${FFX_INCLUDE_PATH} ${FFX_SHARED_PATH} ${SDK_ROOT}/include/FidelityFX/host/backends ${FFX_API_CAULDRON_ROOT} ${Vulkan_INCLUDE_DIRS})
+if (WIN32)
+	target_include_directories(backend_shader_reloader_impl PUBLIC ${FFX_INCLUDE_PATH} ${FFX_SHARED_PATH} ${SDK_ROOT}/include/FidelityFX/host/backends ${FFX_API_CAULDRON_ROOT} ${Vulkan_INCLUDE_DIRS})
+endif()
 target_include_directories(backend_shader_reloader_stub PUBLIC ${FFX_INCLUDE_PATH} ${FFX_SHARED_PATH} ${SDK_ROOT}/include/FidelityFX/host/backends ${FFX_API_CAULDRON_ROOT} ${Vulkan_INCLUDE_DIRS})

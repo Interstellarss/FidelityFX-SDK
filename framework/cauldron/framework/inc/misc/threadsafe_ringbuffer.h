@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <condition_variable>
 #include <mutex>
 
@@ -125,7 +126,7 @@ namespace cauldron
                 m_cv.wait(lk, [this] { return this->m_closed || this->m_size < CAPACITY; });
                 if (!m_closed)
                 {
-                    CauldronAssert(ASSERT_CRITICAL, m_size < CAPACITY, L"Ring buffer is full");
+                    assert(m_size < CAPACITY);
                     size_t index = (m_startIndex + m_size) % CAPACITY;
                     m_data[index] = std::move(item);
                     ++m_size;

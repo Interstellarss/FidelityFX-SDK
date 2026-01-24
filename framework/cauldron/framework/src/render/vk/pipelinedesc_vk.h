@@ -28,9 +28,12 @@
 #include <vulkan/vulkan.h>
 #include <array>
 
+#define WIDEN_LITERAL(x) L##x
+#define WSTRINGIFY_LITERAL(x) WIDEN_LITERAL(#x)
+
 #define BINDING_SHIFT(name, shift) \
     constexpr uint32_t name##_BINDING_SHIFT = shift;\
-    constexpr wchar_t* name##_BINDING_SHIFT_STR = L#shift;
+    constexpr const wchar_t* name##_BINDING_SHIFT_STR = WSTRINGIFY_LITERAL(shift);
 
 namespace cauldron
 {

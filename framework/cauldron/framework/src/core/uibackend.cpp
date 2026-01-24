@@ -31,6 +31,7 @@ namespace cauldron
 {
     UIBackend::UIBackend()
     {
+        m_BackendReady.store(false);
         // Init filters
         memset(m_FilterEnabled, 1, sizeof(bool) * LOGLEVEL_COUNT);
     }

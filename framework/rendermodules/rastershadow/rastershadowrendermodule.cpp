@@ -150,7 +150,8 @@ void RasterShadowRenderModule::Execute(double deltaTime, CommandList* pCmdList)
         CauldronAssert(ASSERT_CRITICAL, pShadowMapTarget != nullptr, L"Unable to get a shadow map");
 
         // Do clears
-        ClearDepthStencil(pCmdList, &shadowMapInfo.pRasterView->GetResourceView(), 0);
+        ResourceViewInfo shadowView = shadowMapInfo.pRasterView->GetResourceView();
+        ClearDepthStencil(pCmdList, &shadowView, 0);
 
         // Bind raster resources
         BeginRaster(pCmdList, 0, nullptr, shadowMapInfo.pRasterView);
@@ -241,7 +242,7 @@ void RasterShadowRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
                             BufferAddressInfo& textureIndicesBufferInfo = textureIndicesBufferInfos[currentSurface];
                             GetDynamicBufferPool()->InitializeConstantBuffer(
-                                textureIndicesBufferInfo, sizeof(TextureIndices), &pipelineSurfaceInfo.TextureIndices);
+                                textureIndicesBufferInfo, sizeof(TextureIndices), &pipelineSurfaceInfo.textureIndices);
 
                             currentSurface++;
 
@@ -337,8 +338,8 @@ void RasterShadowRenderModule::OnNewContentLoaded(ContentBlock* pContentBlock)
                     int32_t samplerIndex;
                     if (pMaterial->HasPBRInfo())
                     {
-                        surfaceRenderInfo.TextureIndices.AlbedoTextureIndex = AddTexture(pMaterial, TextureClass::Albedo, samplerIndex);
-                        surfaceRenderInfo.TextureIndices.AlbedoSamplerIndex = samplerIndex;
+                        surfaceRenderInfo.textureIndices.AlbedoTextureIndex = AddTexture(pMaterial, TextureClass::Albedo, samplerIndex);
+                        surfaceRenderInfo.textureIndices.AlbedoSamplerIndex = samplerIndex;
                     }
 
                     // Assign to the correct pipeline render group (will create a new pipeline group if needed)
@@ -404,7 +405,7 @@ void RasterShadowRenderModule::OnContentUnloaded(ContentBlock* pContentBlock)
                     for (auto& pipelineGroup : m_PipelineRenderGroups)
                     {
                         bool surfaceFound = false;
-                        for (auto& surfaceItr = pipelineGroup.m_RenderSurfaces.begin(); surfaceItr != pipelineGroup.m_RenderSurfaces.end(); ++surfaceItr)
+                        for (auto surfaceItr = pipelineGroup.m_RenderSurfaces.begin(); surfaceItr != pipelineGroup.m_RenderSurfaces.end(); ++surfaceItr)
                         {
                             if (surfaceItr->pOwner == pOwner && surfaceItr->pSurface == pSurface)
                             {
@@ -412,7 +413,7 @@ void RasterShadowRenderModule::OnContentUnloaded(ContentBlock* pContentBlock)
                                 surfaceFound = true;
 
                                 // Remove the texture entries
-                                RemoveTexture(surfaceItr->TextureIndices.AlbedoTextureIndex);
+                                RemoveTexture(surfaceItr->textureIndices.AlbedoTextureIndex);
 
                                 // Remove it from the list
                                 pipelineGroup.m_RenderSurfaces.erase(surfaceItr);
@@ -613,7 +614,9 @@ int32_t RasterShadowRenderModule::AddTexture(const Material* pMaterial, const Te
         }
 
         // Texture wasn't found
-        BoundTexture b = { pTextureInfo->pTexture, 1 };
+        BoundTexture b;
+        b.pTexture = pTextureInfo->pTexture;
+        b.count = 1;
         if (firstFreeIndex < 0)
         {
             m_Textures.push_back(b);
@@ -760,7 +763,8 @@ void RasterShadowRenderModule::UpdateUIState(bool hasDirectional)
             1, 4,
             enabled,
             [this](int32_t cur, int32_t old) {
-                for (int i = 0; i < _countof(m_CascadeSplitPointsEnabled); ++i)
+                const uint32_t cascadeSplitCount = static_cast<uint32_t>(sizeof(m_CascadeSplitPointsEnabled) / sizeof(m_CascadeSplitPointsEnabled[0]));
+                for (uint32_t i = 0; i < cascadeSplitCount; ++i)
                     m_CascadeSplitPointsEnabled[i] = (m_NumCascades > i + 1);
                 UpdateCascades();
             });
@@ -793,7 +797,8 @@ void RasterShadowRenderModule::UpdateUIState(bool hasDirectional)
             "Camera Pixel Align",
             m_MoveLightTexelSize,
             [this](bool cur, bool old) {
-                for (int i = 0; i < _countof(m_CascadeSplitPointsEnabled); ++i)
+                const uint32_t cascadeSplitCount = static_cast<uint32_t>(sizeof(m_CascadeSplitPointsEnabled) / sizeof(m_CascadeSplitPointsEnabled[0]));
+                for (uint32_t i = 0; i < cascadeSplitCount; ++i)
                     m_CascadeSplitPointsEnabled[i] = (m_NumCascades > i + 1);
                 UpdateCascades();
             });

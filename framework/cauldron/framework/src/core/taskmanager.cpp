@@ -68,7 +68,7 @@ namespace cauldron
         }
     }
 
-    void TaskManager::AddTask(Task& newTask) 
+    void TaskManager::AddTask(Task newTask) 
     { 
         std::unique_lock<std::mutex> lock(m_CriticalSection);
         m_TaskQueue.push(std::move(newTask));

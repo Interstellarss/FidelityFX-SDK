@@ -29,6 +29,8 @@
 #include "render/device.h"
 #include "render/gpuresource.h"
 
+#include <cstdint>
+
 using namespace std::experimental;
 
 namespace cauldron
@@ -80,9 +82,10 @@ namespace cauldron
     void TextureLoader::LoadTextureContent(void* pParam)
     {
         TextureLoadInfo& loadInfo = *reinterpret_cast<TextureLoadInfo*>(pParam);
+        std::wstring textureFileW = StringToWString(loadInfo.TextureFile.string());
 
         bool fileExists = filesystem::exists(loadInfo.TextureFile);
-        CauldronAssert(ASSERT_ERROR, fileExists, L"Could not find texture file %ls. Please run ClearMediaCache.bat followed by UpdateMedia.bat to sync to latest media.", loadInfo.TextureFile.c_str());
+        CauldronAssert(ASSERT_ERROR, fileExists, L"Could not find texture file %ls. Please run ClearMediaCache.bat followed by UpdateMedia.bat to sync to latest media.", textureFileW.c_str());
 
         if (fileExists)
         {
@@ -99,11 +102,11 @@ namespace cauldron
 
             bool loaded = pTextureData->LoadTextureData(loadInfo.TextureFile, loadInfo.AlphaThreshold, texDesc);
 
-            CauldronAssert(ASSERT_ERROR, loaded, L"Could not load texture %ls (TextureDataBlock::LoadTextureData() failed)", loadInfo.TextureFile.c_str());
+            CauldronAssert(ASSERT_ERROR, loaded, L"Could not load texture %ls (TextureDataBlock::LoadTextureData() failed)", textureFileW.c_str());
             if (loaded)
             {
                 // We will use the relative path as the name of the asset since it's guaranteed to be unique
-                texDesc.Name = loadInfo.TextureFile.c_str();
+                texDesc.Name = textureFileW;
 
                 // Pass along resource flags
                 texDesc.Flags = static_cast<ResourceFlags>(loadInfo.Flags);
@@ -155,7 +158,7 @@ namespace cauldron
             ContentManager* pContentManager = GetContentManager();
             while (iter != pLoadParams->LoadInfo.end())
             {
-                loadedTextures.push_back(pContentManager->GetTexture(iter->TextureFile.c_str()));
+                loadedTextures.push_back(pContentManager->GetTexture(StringToWString(iter->TextureFile.string())));
                 ++iter;
             }
 
@@ -281,7 +284,8 @@ namespace cauldron
 
     bool WICTextureDataBlock::LoadTextureData(filesystem::path& textureFile, float alphaThreshold, TextureDesc& texDesc)
     {
-        std::string fileName = textureFile.u8string();
+        auto fileNameU8 = textureFile.u8string();
+        std::string fileName(reinterpret_cast<const char*>(fileNameU8.c_str()));
 
         int32_t channels;
         m_pData = reinterpret_cast<char*>(stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_rgb_alpha));
@@ -330,37 +334,41 @@ namespace cauldron
     }
 
     // Needed for DDS loading
+#if defined(_WIN32)
 #include <dxgiformat.h>
+#else
+#include <directx/dxgiformat.h>
+#endif
 
     struct DDS_PIXELFORMAT
     {
-        UINT32 size;
-        UINT32 flags;
-        UINT32 fourCC;
-        UINT32 bitCount;
-        UINT32 bitMaskR;
-        UINT32 bitMaskG;
-        UINT32 bitMaskB;
-        UINT32 bitMaskA;
+        uint32_t size;
+        uint32_t flags;
+        uint32_t fourCC;
+        uint32_t bitCount;
+        uint32_t bitMaskR;
+        uint32_t bitMaskG;
+        uint32_t bitMaskB;
+        uint32_t bitMaskA;
     };
 
     struct DDS_HEADER
     {
 
-        UINT32          dwSize;
-        UINT32          dwHeaderFlags;
-        UINT32          dwHeight;
-        UINT32          dwWidth;
-        UINT32          dwPitchOrLinearSize;
-        UINT32          dwDepth;
-        UINT32          dwMipMapCount;
-        UINT32          dwReserved1[11];
+        uint32_t        dwSize;
+        uint32_t        dwHeaderFlags;
+        uint32_t        dwHeight;
+        uint32_t        dwWidth;
+        uint32_t        dwPitchOrLinearSize;
+        uint32_t        dwDepth;
+        uint32_t        dwMipMapCount;
+        uint32_t        dwReserved1[11];
         DDS_PIXELFORMAT ddspf;
-        UINT32          dwSurfaceFlags;
-        UINT32          dwCubemapFlags;
-        UINT32          dwCaps3;
-        UINT32          dwCaps4;
-        UINT32          dwReserved2;
+        uint32_t        dwSurfaceFlags;
+        uint32_t        dwCubemapFlags;
+        uint32_t        dwCaps3;
+        uint32_t        dwCaps4;
+        uint32_t        dwReserved2;
     };
 
     ResourceFormat DXGIToResourceFormat(DXGI_FORMAT format)
@@ -487,6 +495,8 @@ namespace cauldron
 
     bool DDSTextureDataBlock::LoadTextureData(filesystem::path& textureFile, float alphaThreshold, TextureDesc& texDesc)
     {
+        std::wstring textureFileW = StringToWString(textureFile.string());
+
         typedef enum RESOURCE_DIMENSION
         {
             RESOURCE_DIMENSION_UNKNOWN = 0,
@@ -500,17 +510,17 @@ namespace cauldron
         {
             DXGI_FORMAT         dxgiFormat;
             RESOURCE_DIMENSION  resourceDimension;
-            UINT32              miscFlag;
-            UINT32              arraySize;
-            UINT32              reserved;
+            uint32_t            miscFlag;
+            uint32_t            arraySize;
+            uint32_t            reserved;
         } DDS_HEADER_DXT10;
 
         // Get the file size
-        int64_t fileSize = GetFileSize(textureFile.c_str());
+        int64_t fileSize = GetFileSize(textureFileW.c_str());
         int64_t rawTextureSize = fileSize;
         if (fileSize == -1)
         {
-            CauldronError(L"Could not get file size of %ls", textureFile.c_str());
+            CauldronError(L"Could not get file size of %ls", textureFileW.c_str());
             return false;
         }
 
@@ -519,10 +529,10 @@ namespace cauldron
         char headerData[c_HEADER_SIZE];
         uint32_t bytesRead = 0;
 
-        int64_t sizeRead = ReadFilePartial(textureFile.c_str(), headerData, c_HEADER_SIZE);
+        int64_t sizeRead = ReadFilePartial(textureFileW.c_str(), headerData, c_HEADER_SIZE);
         if (sizeRead != c_HEADER_SIZE)
         {
-            CauldronError(L"Error reading texture header data for file %ls", textureFile.c_str());
+            CauldronError(L"Error reading texture header data for file %ls", textureFileW.c_str());
             return false;
         }
 
@@ -594,11 +604,11 @@ namespace cauldron
 
         // Read in the data representing the texture (remainder of the file after the header)
         m_pData = new char[rawTextureSize];
-        sizeRead = ReadFilePartial(textureFile.c_str(), m_pData, rawTextureSize, fileSize - rawTextureSize);
+        sizeRead = ReadFilePartial(textureFileW.c_str(), m_pData, rawTextureSize, fileSize - rawTextureSize);
         if (sizeRead != rawTextureSize)
         {
             delete[](m_pData);
-            CauldronError(L"Error reading texture data for file %ls", textureFile.c_str());
+            CauldronError(L"Error reading texture data for file %ls", textureFileW.c_str());
             return false;
         }
 

@@ -921,7 +921,7 @@ namespace cauldron
             renderingInfo.pDepthAttachment = &depthStencilAttachment;
         }
 
-        if (pVrsInfo != nullptr && pVrsInfo->VariableShadingMode > VariableShadingMode::VariableShadingMode_Per_Draw)
+        if (pVrsInfo != nullptr && pVrsInfo->ShadingMode > VariableShadingMode::VariableShadingMode_Per_Draw)
         {
             VkRenderingFragmentShadingRateAttachmentInfoKHR shadingRateInfo = {};
 
@@ -983,7 +983,13 @@ namespace cauldron
 
     void SetViewportScissorRect(CommandList* pCmdList, uint32_t left, uint32_t top, uint32_t width, uint32_t height, float nearDist, float farDist)
     {
-        Viewport vp = {static_cast<float>(left), static_cast<float>(top), static_cast<float>(width), static_cast<float>(height), nearDist, farDist};
+        Viewport vp = {};
+        vp.X = static_cast<float>(left);
+        vp.Y = static_cast<float>(top);
+        vp.Width = static_cast<float>(width);
+        vp.Height = static_cast<float>(height);
+        vp.MinDepth = nearDist;
+        vp.MaxDepth = farDist;
         SetViewport(pCmdList, &vp);
         Rect scissorRect = {0, 0, width, height};
         SetScissorRects(pCmdList, 1, &scissorRect);

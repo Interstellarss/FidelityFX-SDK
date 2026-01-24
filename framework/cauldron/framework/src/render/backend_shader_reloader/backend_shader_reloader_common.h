@@ -24,7 +24,11 @@
 
 #include "backend_shader_reloader.h"
 
-#include <windows.h> 
+#if defined(_WIN)
+#include <windows.h>
+#else
+using HMODULE = void*;
+#endif
 
 namespace backend_shader_reloader
 {

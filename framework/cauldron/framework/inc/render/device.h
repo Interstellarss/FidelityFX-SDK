@@ -44,7 +44,7 @@ namespace cauldron
     /// @ingroup CauldronRender
     struct VariableShadingRateInfo
     {
-        VariableShadingMode VariableShadingMode;    ///< The <c><i>VariableShadingMode</i></c> to use.
+        VariableShadingMode ShadingMode;           ///< The <c><i>VariableShadingMode</i></c> to use.
         ShadingRate         BaseShadingRate;        ///< The <c><i>ShadingRate</i></c> to use.
         const Texture*      pShadingRateImage;      ///< The shading rate texture to use.
         ShadingRateCombiner Combiners[2];           ///< The <c><i>ShadingRateCombiner</i></c>s to use.

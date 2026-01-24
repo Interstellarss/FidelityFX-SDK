@@ -28,6 +28,7 @@
 #include <functional>
 #include <map>
 #include <vector>
+#include <atomic>
 
 
 namespace cauldron
@@ -837,7 +838,7 @@ namespace cauldron
 
         UIBackend*                                      m_pUIBackEnd = nullptr;
         std::map<uint64_t, UISection*>  m_UIGeneralLayout;  // Layout for the general tab in the UI (all elements go here under various headings)
-        std::atomic_bool                                m_ProcessingUI = false;
+        std::atomic_bool                                m_ProcessingUI;
         uint32_t                                        m_SectionIDGenerator = 0;
         static const uint32_t                           LowestPriority       = std::numeric_limits<uint32_t>::max();
     };

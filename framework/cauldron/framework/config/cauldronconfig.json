@@ -27,11 +27,12 @@
 
         "RenderResources": {
             "HDR11Color": {
-                "Format": "RG11B10_FLOAT",
+                "Format": "RGBA16_FLOAT",
                 "AllowUAV": true
             },
             "DepthTarget": {
-                "Format": "D32_FLOAT"
+                "Format": "D32_FLOAT",
+                "RenderResolution": true
             },
             "DistortionField0": {
                 "Format": "RG16_FLOAT",

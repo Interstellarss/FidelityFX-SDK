@@ -94,15 +94,18 @@ void RayTracingRenderModule::OnNewContentLoaded(ContentBlock* pContentBlock)
             {
                 const Mesh*  pMesh       = reinterpret_cast<MeshComponent*>(pComponent)->GetData().pMesh;
 
-                if (pMesh->HasAnimatedBlas())
-                {
-                    const auto& animationData = pComponent->GetOwner()->GetComponent<const AnimationComponent>(AnimationComponentMgr::Get())->GetData();
+                    if (pMesh->HasAnimatedBlas())
+                    {
+                    const AnimationComponentData* animationData = pComponent->GetOwner()->GetComponent<const AnimationComponent>(AnimationComponentMgr::Get())->GetData();
 
-                    m_RTAnimatedMeshes.push_back({animationData, reinterpret_cast<MeshComponent*>(pComponent)});
+                    RTAnimatedMeshes meshInfo;
+                    meshInfo.pAnimationComponentData = animationData;
+                    meshInfo.pMeshComponent = reinterpret_cast<MeshComponent*>(pComponent);
+                    m_RTAnimatedMeshes.push_back(meshInfo);
+                    }
                 }
             }
         }
-    }
 
 }
 

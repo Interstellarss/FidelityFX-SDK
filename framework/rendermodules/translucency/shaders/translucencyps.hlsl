@@ -52,6 +52,17 @@
 //     https://www.cs.virginia.edu/~jdl/bib/appearance/analytic%20models/schlick94b.pdf
 //
 
+#ifndef MAX_TEXTURES_COUNT
+    #define MAX_TEXTURES_COUNT 1000
+#endif
+#ifndef MAX_SAMPLERS_COUNT
+    #define MAX_SAMPLERS_COUNT 20
+#endif
+
+Texture2D AllTextures[MAX_TEXTURES_COUNT]    : register(TRANS_ALL_TEXTURES_INDEX);
+SamplerState AllSamplers[MAX_SAMPLERS_COUNT] : register(s4);
+
+#define SURFACE_RENDERCOMMON_HAS_TEXTURES 1
 #include "surfacerendercommon.h"
 
 //////////////////////////////////////////////////////////////////////////
@@ -85,9 +96,6 @@ TextureCube  prefilteredCube                                  : register(t2);
 SamplerState samBRDF                                          : register(s0);
 SamplerState samIrradianceCube                                : register(s1);
 SamplerState samPrefilteredCube                               : register(s2);
-
-Texture2D AllTextures[]    : register(TRANS_ALL_TEXTURES_INDEX);
-SamplerState AllSamplers[] : register(s4);
 
 // ------------------------------------------------------
 // IBL --------------------------------------------------
@@ -144,7 +152,7 @@ PSOutputs MainPS(VS_SURFACE_OUTPUT SurfaceInput
 #endif
     float4 BaseColorAlpha;
     float3 AoRoughnessMetallic;
-    GetPBRParams(SurfaceInput, InstanceInfo.MaterialInfo, BaseColorAlpha, AoRoughnessMetallic, Textures, AllTextures, AllSamplers, SceneInfo.MipLODBias);
+    GetPBRParams(SurfaceInput, InstanceInfo.MaterialInfo, BaseColorAlpha, AoRoughnessMetallic, Textures FFX_RESOURCE_ARGS, SceneInfo.MipLODBias);
 
     DiscardPixelIfAlphaCutOff(BaseColorAlpha.a, InstanceInfo);
 
@@ -153,7 +161,7 @@ PSOutputs MainPS(VS_SURFACE_OUTPUT SurfaceInput
     AoRoughnessMetallic.g *= AoRoughnessMetallic.g;
 
     pixelInfo.pixelBaseColorAlpha       = BaseColorAlpha;
-    pixelInfo.pixelNormal               = float4(GetPixelNormal(SurfaceInput, Textures, SceneInfo, AllTextures, AllSamplers, SceneInfo.MipLODBias, isFrontFace), 1.f);
+    pixelInfo.pixelNormal               = float4(GetPixelNormal(SurfaceInput, Textures, SceneInfo FFX_RESOURCE_ARGS, SceneInfo.MipLODBias, isFrontFace), 1.f);
     pixelInfo.pixelAoRoughnessMetallic  = AoRoughnessMetallic;
     pixelInfo.pixelWorldPos             = float4(SurfaceInput.WorldPos, 1.f);
 

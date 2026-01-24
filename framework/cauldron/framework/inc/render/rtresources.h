@@ -159,8 +159,8 @@ namespace cauldron
      */
     struct ASInstance
     {
-        const Mesh* Mesh = nullptr;         ///< A mesh instance.
-        const Mat4& Transform;              ///< The mesh instance's transform.
+        const Mesh* pMesh = nullptr;        ///< A mesh instance.
+        Mat4        Transform;              ///< The mesh instance's transform.
         const BLAS* AnimatedBlas = nullptr; ///< A pointer to the animated Blas
     };
 
@@ -199,7 +199,14 @@ namespace cauldron
         /**
          * @brief   Pushes a new <c><i>ASInstance</i></c> for a <c><i>Mesh</i></c> to the managed list of instances.
          */
-        void PushInstance(const Mesh* pMesh, const Mat4& transform, const BLAS* animatedBlas = nullptr) { m_ManagedInstances.push({pMesh, transform, animatedBlas}); }
+        void PushInstance(const Mesh* pMesh, const Mat4& transform, const BLAS* animatedBlas = nullptr)
+        {
+            ASInstance instance;
+            instance.pMesh = pMesh;
+            instance.Transform = transform;
+            instance.AnimatedBlas = animatedBlas;
+            m_ManagedInstances.push(instance);
+        }
 
     private:
         NO_COPY(ASManager)

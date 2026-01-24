@@ -44,15 +44,19 @@ endif()
 project ("${SOLUTION_NAME}" VERSION 1.0.0 LANGUAGES C CXX)
 message(STATUS "Building FidelityFX SDK Samples")
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Pull in common definitions and functions
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR} )
 include(common)
 include(sample)
 
 # Configuration setup
-if (CMAKE_GENERATOR_PLATFORM STREQUAL x64 OR
+if (WIN32 AND (CMAKE_GENERATOR_PLATFORM STREQUAL "" OR
+    CMAKE_GENERATOR_PLATFORM STREQUAL x64 OR
 	CMAKE_GENERATOR_PLATFORM STREQUAL ARM64 OR
-	CMAKE_GENERATOR_PLATFORM STREQUAL ARM64EC)
+	CMAKE_GENERATOR_PLATFORM STREQUAL ARM64EC))
     message(STATUS "Creating sample configs ...")
 	set(CMAKE_CONFIGURATION_TYPES "")
 	if (CAULDRON_DX12)
@@ -83,7 +87,17 @@ if (CMAKE_GENERATOR_PLATFORM STREQUAL x64 OR
     )
 
 else()
-    message(FATAL_ERROR "Requested architecture ${CMAKE_GENERATOR_PLATFORM} not yet supported!)")
+    # For single-config generators on non-Windows, treat empty/unknown
+    # platform as a generic 64-bit target without special configs.
+    set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
+    message(STATUS "Using simplified configuration type(s): ${CMAKE_CONFIGURATION_TYPES}")
+
+    if (CAULDRON_DX12)
+        set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS _DX12 _RELEASE)
+    endif()
+    if (CAULDRON_VK)
+        set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS _VK _RELEASE)
+    endif()
 endif()
 
 # Ouput exe to bin directory
@@ -100,14 +114,31 @@ endif()
 
 # Import backend libs
 add_library(ffx_backend_native STATIC IMPORTED)
-set_target_properties(ffx_backend_native PROPERTIES
-					  IMPORTED_CONFIGURATIONS "DebugDX12;DebugVK;RelWithDebInfoDX12;RelWithDebInfoVK;ReleaseDX12;ReleaseVK"
-					  IMPORTED_LOCATION_DEBUGDX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_dx12_${CMAKE_GENERATOR_PLATFORM}d.lib"
-					  IMPORTED_LOCATION_RELEASEDX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_dx12_${CMAKE_GENERATOR_PLATFORM}.lib"
-					  IMPORTED_LOCATION_RELWITHDEBINFODX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_dx12_${CMAKE_GENERATOR_PLATFORM}drel.lib"
-					  IMPORTED_LOCATION_DEBUGVK "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_vk_${CMAKE_GENERATOR_PLATFORM}d.lib"
-					  IMPORTED_LOCATION_RELEASEVK "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_vk_${CMAKE_GENERATOR_PLATFORM}.lib"
-					  IMPORTED_LOCATION_RELWITHDEBINFOVK "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_vk_${CMAKE_GENERATOR_PLATFORM}drel.lib")
+if (WIN32)
+	set_target_properties(ffx_backend_native PROPERTIES
+						  IMPORTED_CONFIGURATIONS "DebugDX12;DebugVK;RelWithDebInfoDX12;RelWithDebInfoVK;ReleaseDX12;ReleaseVK"
+						  IMPORTED_LOCATION_DEBUGDX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_dx12_${CMAKE_GENERATOR_PLATFORM}d.lib"
+						  IMPORTED_LOCATION_RELEASEDX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_dx12_${CMAKE_GENERATOR_PLATFORM}.lib"
+						  IMPORTED_LOCATION_RELWITHDEBINFODX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_dx12_${CMAKE_GENERATOR_PLATFORM}drel.lib"
+						  IMPORTED_LOCATION_DEBUGVK "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_vk_${CMAKE_GENERATOR_PLATFORM}d.lib"
+						  IMPORTED_LOCATION_RELEASEVK "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_vk_${CMAKE_GENERATOR_PLATFORM}.lib"
+						  IMPORTED_LOCATION_RELWITHDEBINFOVK "${SDK_ROOT}/bin/ffx_sdk/ffx_backend_vk_${CMAKE_GENERATOR_PLATFORM}drel.lib")
+else()
+	if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+		set(FFX_PLATFORM_NAME x64)
+	else()
+		set(FFX_PLATFORM_NAME x86)
+	endif()
+	if (CAULDRON_VK)
+		set(FFX_BACKEND_LIB "${SDK_ROOT}/bin/ffx_sdk/libffx_backend_vk_${FFX_PLATFORM_NAME}.a")
+		set(FFX_BACKEND_LIB_BUILD "${SDK_ROOT}/build-linux/src/backends/vk/libffx_backend_vk_${FFX_PLATFORM_NAME}.a")
+		if (EXISTS "${FFX_BACKEND_LIB_BUILD}")
+			set(FFX_BACKEND_LIB "${FFX_BACKEND_LIB_BUILD}")
+		endif()
+		set_target_properties(ffx_backend_native PROPERTIES
+							  IMPORTED_LOCATION "${FFX_BACKEND_LIB}")
+	endif()
+endif()
 
 if (FFX_BUILD_AS_DLL)
     file(GLOB SDK_DLLS "${SDK_ROOT}/bin/ffx_sdk/*.dll")

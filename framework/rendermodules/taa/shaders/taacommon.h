@@ -38,6 +38,6 @@ cbuffer TAACBData : register(b0)
     uint RenderWidth : packoffset(c0.x);
     uint RenderHeight : packoffset(c0.y);
     uint DisplayWidth : packoffset(c0.z);
-    uint DisplayHeight : packoffset(c0.a);
+    uint DisplayHeight : packoffset(c0.w);
 }
 #endif // __cplusplus

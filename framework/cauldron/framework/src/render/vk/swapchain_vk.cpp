@@ -22,8 +22,12 @@
 
 #if defined(_VK)
 
-// _VK define implies windows
+// _VK define implies a Vulkan build
+#if defined(_WIN)
 #include "core/win/framework_win.h"
+#else
+#include "core/linux/framework_linux.h"
+#endif
 #include "misc/assert.h"
 
 #include "render/vk/commandlist_vk.h"
@@ -39,7 +43,13 @@
 #include "stb/stb_image_write.h"
 
 #include <unordered_map>
+#if defined(_WIN)
+#include <dwmapi.h>
+#pragma comment(lib, "Dwmapi.lib")
+#endif
+#if defined(_WIN)
 #include <vulkan/vulkan_win32.h>
+#endif
 
 using namespace std::experimental;
 
@@ -315,28 +325,13 @@ namespace cauldron
 
         m_VSyncEnabled = pConfig->Vsync;
 
-        DeviceInternal* pDevice = GetDevice()->GetImpl();
-
-        // create semaphores to acquire the swapchain images
-        m_ImageAvailableSemaphores.resize(pConfig->BackBufferCount + 1);
-        VkSemaphoreCreateInfo info = {};
-        info.sType             = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        info.flags             = 0;
-        for (uint8_t i = 0; i < pConfig->BackBufferCount + 1; ++i)
-        {
-            VkResult res = vkCreateSemaphore(pDevice->VKDevice(), &info, nullptr, &m_ImageAvailableSemaphores[i]);
-            CauldronAssert(ASSERT_CRITICAL, res == VK_SUCCESS, L"Unable to create semaphore to acquire swapchain images");
-
-            char buf[48];
-            snprintf(buf, 48 * sizeof(char), "CauldronImageAcquireSemaphore %d", i);
-            pDevice->SetResourceName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)(m_ImageAvailableSemaphores[i]), buf);
-        }
-
         // create the swapchain
         CreateSwapChain(pConfig->Width, pConfig->Height);
 
         // create the rendertargets
         CreateSwapChainRenderTargets();
+
+        RebuildSyncObjects(static_cast<uint32_t>(m_pRenderTarget->GetBackBufferCount()));
     }
 
     SwapChainInternal::~SwapChainInternal()
@@ -359,16 +354,31 @@ namespace cauldron
         DeviceInternal* pDevice = GetDevice()->GetImpl();
         const CauldronConfig* pConfig = GetConfig();
 
-        m_BackBufferFences.resize(pConfig->BackBufferCount);
-        for (uint8_t i = 0; i < pConfig->BackBufferCount; ++i)
-            m_BackBufferFences[i] = 0;
-
         // query the swapchain capabilities to find the correct format and the correct present mode
         SwapChainSupportDetails swapChainSupport = {};
         QuerySwapChainSupport(pDevice->VKPhysicalDevice(), pDevice->GetSurface(), swapChainSupport);;
 
         // Find all HDR modes supported by current display and pick surface format
         EnumerateDisplayModesAndFormats(swapChainSupport.formats2);
+
+        uint32_t requestedBackBufferCount = static_cast<uint32_t>(pConfig->BackBufferCount);
+        const uint32_t minImageCount = swapChainSupport.capabilities2.surfaceCapabilities.minImageCount;
+        const uint32_t maxImageCount = swapChainSupport.capabilities2.surfaceCapabilities.maxImageCount;
+        if (requestedBackBufferCount < minImageCount)
+            requestedBackBufferCount = minImageCount;
+        if (maxImageCount > 0 && requestedBackBufferCount > maxImageCount)
+            requestedBackBufferCount = maxImageCount;
+
+        if (requestedBackBufferCount != pConfig->BackBufferCount)
+        {
+            CauldronWarning(L"Adjusting BackBufferCount from %u to %u based on swapchain capabilities.",
+                            static_cast<uint32_t>(pConfig->BackBufferCount),
+                            requestedBackBufferCount);
+            CauldronConfig* mutableConfig = const_cast<CauldronConfig*>(pConfig);
+            mutableConfig->BackBufferCount = static_cast<uint8_t>(requestedBackBufferCount);
+        }
+
+        m_BackBufferFences.assign(requestedBackBufferCount, 0);
 
         SwapChainCreationParams swapchainCreationParams                   = {};
         swapchainCreationParams.swapchainCreateInfo                       = {};
@@ -377,7 +387,7 @@ namespace cauldron
         swapchainCreationParams.swapchainCreateInfo.flags                 = 0;
         swapchainCreationParams.swapchainCreateInfo.surface               = pDevice->GetSurface();
         swapchainCreationParams.swapchainCreateInfo.imageFormat           = m_SurfaceFormat.format;
-        swapchainCreationParams.swapchainCreateInfo.minImageCount         = pConfig->BackBufferCount;
+        swapchainCreationParams.swapchainCreateInfo.minImageCount         = requestedBackBufferCount;
         swapchainCreationParams.swapchainCreateInfo.imageColorSpace       = m_SurfaceFormat.colorSpace;
         swapchainCreationParams.swapchainCreateInfo.imageExtent.width     = m_Width;
         swapchainCreationParams.swapchainCreateInfo.imageExtent.height    = m_Height;
@@ -440,7 +450,17 @@ namespace cauldron
         VkResult res = pDevice->GetSwapchainImagesKHR(m_SwapChain, &backBufferCount, NULL);
         CauldronAssert(ASSERT_CRITICAL, res == VK_SUCCESS, L"Unable to get the swapchain images");
 
-        CauldronAssert(ASSERT_CRITICAL, backBufferCount == pConfig->BackBufferCount, L"Requested swapchain images count is different that the available ones");
+        if (backBufferCount != pConfig->BackBufferCount)
+        {
+            CauldronWarning(L"Swapchain image count %u differs from requested %u. Updating BackBufferCount.",
+                            backBufferCount,
+                            static_cast<uint32_t>(pConfig->BackBufferCount));
+            CauldronConfig* mutableConfig = const_cast<CauldronConfig*>(pConfig);
+            mutableConfig->BackBufferCount = static_cast<uint8_t>(backBufferCount);
+            RebuildSyncObjects(backBufferCount);
+        }
+
+        pDevice->EnsureFrameSemaphoreCount(backBufferCount);
 
         std::vector<VkImage> images(backBufferCount);
         res = pDevice->GetSwapchainImagesKHR(m_SwapChain, &backBufferCount, images.data());
@@ -489,11 +509,49 @@ namespace cauldron
             m_pRenderTarget->Update(&rtDesc, gpuResourceArray);
 
         // Get the views
-        CauldronAssert(ASSERT_CRITICAL, m_pSwapChainRTV == nullptr || m_pSwapChainRTV->GetCount() == backBufferCount, L"SwapChain RTV has a wrong size");
+        if (m_pSwapChainRTV != nullptr && m_pSwapChainRTV->GetCount() < backBufferCount)
+        {
+            delete m_pSwapChainRTV;
+            m_pSwapChainRTV = nullptr;
+        }
         if (m_pSwapChainRTV == nullptr)
             GetResourceViewAllocator()->AllocateCPURenderViews(&m_pSwapChainRTV, backBufferCount);
         for (uint32_t i = 0; i < backBufferCount; ++i)
             m_pSwapChainRTV->BindTextureResource(m_pRenderTarget->GetResource(i), m_pRenderTarget->GetDesc(), ResourceViewType::RTV, ViewDimension::Texture2D, 0, 1, 0, i);
+    }
+
+    void SwapChainInternal::RebuildSyncObjects(uint32_t backBufferCount)
+    {
+        DeviceInternal* pDevice = GetDevice()->GetImpl();
+
+        if (m_ImageAvailableSemaphores.size() != backBufferCount + 1)
+        {
+            for (VkSemaphore semaphore : m_ImageAvailableSemaphores)
+                vkDestroySemaphore(pDevice->VKDevice(), semaphore, nullptr);
+            m_ImageAvailableSemaphores.clear();
+
+            m_ImageAvailableSemaphores.resize(backBufferCount + 1);
+            VkSemaphoreCreateInfo info = {};
+            info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            info.flags = 0;
+            for (uint32_t i = 0; i < backBufferCount + 1; ++i)
+            {
+                VkResult res = vkCreateSemaphore(pDevice->VKDevice(), &info, nullptr, &m_ImageAvailableSemaphores[i]);
+                CauldronAssert(ASSERT_CRITICAL, res == VK_SUCCESS, L"Unable to create semaphore to acquire swapchain images");
+
+                char buf[48];
+                snprintf(buf, sizeof(buf), "CauldronImageAcquireSemaphore %u", i);
+                pDevice->SetResourceName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)(m_ImageAvailableSemaphores[i]), buf);
+            }
+
+            m_ImageAvailableSemaphoreIndex = 0;
+        }
+
+        if (m_BackBufferFences.size() != backBufferCount)
+            m_BackBufferFences.assign(backBufferCount, 0);
+
+        if (m_CurrentBackBuffer >= backBufferCount)
+            m_CurrentBackBuffer = 0;
     }
 
     void SwapChainInternal::WaitForSwapChain()
@@ -667,7 +725,12 @@ namespace cauldron
         void* pData = nullptr;
         res = vmaMapMemory(pDevice->GetVmaAllocator(), allocation, &pData);
         CauldronAssert(ASSERT_ERROR, res == VK_SUCCESS, L"Unable to map buffer for dumping swapchain");
-        stbi_write_jpg(WStringToString(filePath.c_str()).c_str(), (int)swapchainImageInfo.extent.width, (int)swapchainImageInfo.extent.height, 4, pData, 100);
+        #if defined(_WIN)
+        std::string outputPath = WStringToString(filePath.wstring());
+        #else
+        std::string outputPath = filePath.string();
+        #endif
+        stbi_write_jpg(outputPath.c_str(), (int)swapchainImageInfo.extent.width, (int)swapchainImageInfo.extent.height, 4, pData, 100);
         vmaUnmapMemory(pDevice->GetVmaAllocator(), allocation);
 
         // Destroy resources
@@ -772,11 +835,9 @@ namespace cauldron
         *pLastPresentCount = static_cast<UINT>(GetDevice()->GetImpl()->GetLastPresentCountFFX(m_SwapChain));
     }
 
-    #include <dwmapi.h>
-    #pragma comment(lib, "Dwmapi.lib")
-
     void SwapChainInternal::GetRefreshRate(double* outRefreshRate)
     {
+#if defined(_WIN)
         double dwsRate  = 1000.0;
         *outRefreshRate = 1000.0;
 
@@ -858,6 +919,12 @@ namespace cauldron
                 *outRefreshRate = std::min(*outRefreshRate, dwsRate);
             }
         }
+        return;
+#else
+        // Fallback on Linux when display querying is not implemented.
+        *outRefreshRate = 60.0;
+        return;
+#endif
     }
 
 } // namespace cauldron

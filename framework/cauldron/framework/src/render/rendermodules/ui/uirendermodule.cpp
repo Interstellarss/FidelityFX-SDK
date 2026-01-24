@@ -103,7 +103,7 @@ namespace cauldron
 
             // Setup the shaders to build on the pipeline object
             psoDesc.AddShaderDesc(ShaderBuildDesc::Vertex(L"fullscreen.hlsl", L"FullscreenVS", ShaderModel::SM6_0, nullptr));
-            psoDesc.AddShaderDesc(ShaderBuildDesc::Pixel(L"HudLessBlit.hlsl", L"BlitPS", ShaderModel::SM6_0, nullptr));
+            psoDesc.AddShaderDesc(ShaderBuildDesc::Pixel(L"hudlessblit.hlsl", L"BlitPS", ShaderModel::SM6_0, nullptr));
 
             // Setup remaining information and build
             psoDesc.AddPrimitiveTopology(PrimitiveTopologyType::Triangle);
@@ -187,14 +187,15 @@ namespace cauldron
             uiPsoDesc.AddInputLayout(vertexAttributes);
 
             // Setup blend and depth states
-            BlendDesc              blendDesc = {true,
-                                                Blend::SrcAlpha,
-                                                Blend::InvSrcAlpha,
-                                                BlendOp::Add,
-                                                Blend::One,
-                                                Blend::InvSrcAlpha,
-                                                BlendOp::Add,
-                                                static_cast<uint32_t>(ColorWriteMask::All)};
+            BlendDesc blendDesc;
+            blendDesc.BlendEnabled = true;
+            blendDesc.SourceBlendColor = Blend::SrcAlpha;
+            blendDesc.DestBlendColor = Blend::InvSrcAlpha;
+            blendDesc.ColorOp = BlendOp::Add;
+            blendDesc.SourceBlendAlpha = Blend::One;
+            blendDesc.DestBlendAlpha = Blend::InvSrcAlpha;
+            blendDesc.AlphaOp = BlendOp::Add;
+            blendDesc.RenderTargetWriteMask = static_cast<uint32_t>(ColorWriteMask::All);
             std::vector<BlendDesc> blends;
             blends.push_back(blendDesc);
             uiPsoDesc.AddBlendStates(blends, false, false);
@@ -227,14 +228,15 @@ namespace cauldron
             uiPsoDesc.AddInputLayout(vertexAttributes);
 
             // Setup blend and depth states
-            BlendDesc              blendDesc = {true,
-                                                Blend::SrcAlpha,
-                                                Blend::InvSrcAlpha,
-                                                BlendOp::Add,
-                                                Blend::One,
-                                                Blend::InvSrcAlpha,
-                                                BlendOp::Add,
-                                                static_cast<uint32_t>(ColorWriteMask::All)};
+            BlendDesc blendDesc;
+            blendDesc.BlendEnabled = true;
+            blendDesc.SourceBlendColor = Blend::SrcAlpha;
+            blendDesc.DestBlendColor = Blend::InvSrcAlpha;
+            blendDesc.ColorOp = BlendOp::Add;
+            blendDesc.SourceBlendAlpha = Blend::One;
+            blendDesc.DestBlendAlpha = Blend::InvSrcAlpha;
+            blendDesc.AlphaOp = BlendOp::Add;
+            blendDesc.RenderTargetWriteMask = static_cast<uint32_t>(ColorWriteMask::All);
             std::vector<BlendDesc> blends;
             blends.push_back(blendDesc);
             uiPsoDesc.AddBlendStates(blends, false, false);
@@ -491,7 +493,8 @@ namespace cauldron
 
                 // Select the render target
                 const RasterView* pRTRasterView = (m_bRenderToTexture ? m_pUiOnlyRasterView[m_curUiTextureIndex] : m_pUIRasterView);
-                Render(pCmdList, &pRTRasterView->GetResourceView(), &renderParams);
+                ResourceViewInfo  rtViewInfo = pRTRasterView->GetResourceView();
+                Render(pCmdList, &rtViewInfo, &renderParams);
 
                 // Render modules expect resources coming in/going out to be in a shader read state
                 rtBarrier.SourceState = rtBarrier.DestState;
@@ -512,14 +515,21 @@ namespace cauldron
         if (m_bRenderToTexture)
         {
             float clearColor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-            ClearRenderTarget(pCmdList, &m_pUiOnlyRasterView[m_curUiTextureIndex]->GetResourceView(), clearColor);
+            ResourceViewInfo uiOnlyView = m_pUiOnlyRasterView[m_curUiTextureIndex]->GetResourceView();
+            ClearRenderTarget(pCmdList, &uiOnlyView, clearColor);
         }
 
         BeginRaster(pCmdList, 1, pRTViewInfo);
 
         // UI RM always done at display resolution
         const ResolutionInfo& resInfo = GetFramework()->GetResolutionInfo();
-        Viewport              vp      = {0.f, 0.f, resInfo.fDisplayWidth(), resInfo.fDisplayHeight(), 0.f, 1.f};
+        Viewport vp;
+        vp.X = 0.f;
+        vp.Y = 0.f;
+        vp.Width = resInfo.fDisplayWidth();
+        vp.Height = resInfo.fDisplayHeight();
+        vp.MinDepth = 0.f;
+        vp.MaxDepth = 1.f;
         SetViewport(pCmdList, &vp);
         SetPrimitiveTopology(pCmdList, PrimitiveTopology::TriangleList);
 
@@ -681,9 +691,10 @@ namespace cauldron
         // Render modules expect resources coming in/going out to be in a shader read state
         ResourceState state0     = m_pRenderTarget->GetResource()->GetCurrentResourceState();
         ResourceState state1     = m_pHudLessRenderTarget[m_curUiTextureIndex]->GetResource()->GetCurrentResourceState();
-        Barrier       barriers[] = {Barrier::Transition(m_pRenderTarget->GetResource(), state0, ResourceState::PixelShaderResource), 
+        Barrier       barriers[] = {Barrier::Transition(m_pRenderTarget->GetResource(), state0, ResourceState::PixelShaderResource),
                                     Barrier::Transition(m_pHudLessRenderTarget[m_curUiTextureIndex]->GetResource(), state1, ResourceState::RenderTargetResource)};
-        ResourceBarrier(pCmdList, _countof(barriers), barriers);
+        const uint32_t barrierCount = static_cast<uint32_t>(sizeof(barriers) / sizeof(barriers[0]));
+        ResourceBarrier(pCmdList, barrierCount, barriers);
 
         BeginRaster(pCmdList, 1, &m_pHudLessRasterView[m_curUiTextureIndex]);
 
@@ -705,9 +716,9 @@ namespace cauldron
         EndRaster(pCmdList);
 
         // Revert resource states
-        for (int i = 0; i < _countof(barriers); ++i)
+        for (uint32_t i = 0; i < barrierCount; ++i)
             std::swap(barriers[i].SourceState, barriers[i].DestState);
-        ResourceBarrier(pCmdList, _countof(barriers), barriers);
+        ResourceBarrier(pCmdList, barrierCount, barriers);
     }
 
 } // namespace cauldron

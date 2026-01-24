@@ -24,7 +24,6 @@
 
 #ifdef _WIN32
 #include <dwmapi.h>
-#endif  // #ifdef _WIN32
 
 void waitForPerformanceCount(const int64_t targetCount)
 {
@@ -34,6 +33,7 @@ void waitForPerformanceCount(const int64_t targetCount)
         QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&currentCount));
     } while (currentCount < targetCount);
 }
+#endif  // _WIN32
 
 VkResult VulkanQueue::submit(VkCommandBuffer commandBuffer, SubmissionSemaphores& semaphoresToWait, SubmissionSemaphores& semaphoresToSignal, VkFence fence)
 {

@@ -25,6 +25,7 @@
 #include "misc/helpers.h"
 #include "misc/sync.h"
 
+#include <condition_variable>
 #include <vector>
 
 namespace cauldron

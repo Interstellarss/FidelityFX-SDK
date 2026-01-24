@@ -62,6 +62,7 @@ namespace cauldron
     }
 
     Scene::Scene()
+        : m_SceneReady(false)
     {
         m_SceneInformation.MipLODBias = 0.f;
     }
@@ -101,7 +102,7 @@ namespace cauldron
             };
             filesystem::path specPath = GetConfig()->StartupContent.SpecularIBL;
             filesystem::path diffPath = GetConfig()->StartupContent.DiffuseIBL;
-            filesystem::path brdfPath = L"..\\media\\Textures\\BRDF\\BrdfLut.dds";
+            filesystem::path brdfPath = L"../media/Textures/BRDF/BrdfLut.dds";
             std::vector<TextureLoadInfo> texInfo;
             texInfo.push_back(TextureLoadInfo(specPath));
             texInfo.push_back(TextureLoadInfo(diffPath));

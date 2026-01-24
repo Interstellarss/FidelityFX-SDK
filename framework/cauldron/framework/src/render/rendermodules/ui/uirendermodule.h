@@ -43,7 +43,7 @@ namespace cauldron
     class UIRenderModule : public RenderModule
     {
     public:
-        UIRenderModule() : RenderModule(L"UIRenderModule") {}
+        UIRenderModule() : RenderModule(L"UIRenderModule"), m_AsyncChannel(nullptr) {}
         virtual ~UIRenderModule();
 
         void Init(const json& initData) override;
@@ -123,7 +123,7 @@ namespace cauldron
         ParameterSet*               m_pMagnifierParameters      = nullptr;
 
         bool                        m_AsyncRender               = false;
-        std::atomic<RenderParams*>  m_AsyncChannel              = nullptr;
+        std::atomic<RenderParams*>  m_AsyncChannel;
         RenderParams*               m_BufferedRenderParams      = nullptr;
 
         bool                        m_bCopyHudLessTexture       = false;

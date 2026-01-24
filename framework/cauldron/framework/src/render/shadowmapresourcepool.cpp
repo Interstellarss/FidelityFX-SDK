@@ -29,7 +29,13 @@ namespace cauldron
     ShadowMapAtlas::ShadowMapAtlas(uint32_t size, Texture* pRenderTarget)
         : m_pRenderTarget{ pRenderTarget }
     {
-        Cell rootCell = { size, { 0, 0, size, size }, CellStatus::Empty };
+        Cell rootCell;
+        rootCell.size = size;
+        rootCell.rect.Left = 0;
+        rootCell.rect.Top = 0;
+        rootCell.rect.Right = size;
+        rootCell.rect.Bottom = size;
+        rootCell.status = CellStatus::Empty;
         m_Cells.push_back(rootCell);
     }
 
@@ -296,14 +302,14 @@ namespace cauldron
 
     Viewport ShadowMapResourcePool::GetViewport(Rect rect)
     {
-        return {
-            static_cast<float>(rect.Left),
-            static_cast<float>(rect.Top),
-            static_cast<float>(rect.Right - rect.Left),
-            static_cast<float>(rect.Bottom - rect.Top),
-            0.0f,
-            1.0f
-        };
+        Viewport viewport;
+        viewport.X = static_cast<float>(rect.Left);
+        viewport.Y = static_cast<float>(rect.Top);
+        viewport.Width = static_cast<float>(rect.Right - rect.Left);
+        viewport.Height = static_cast<float>(rect.Bottom - rect.Top);
+        viewport.MinDepth = 0.0f;
+        viewport.MaxDepth = 1.0f;
+        return viewport;
     }
 
     Vec4 ShadowMapResourcePool::GetTransformation(Rect rect)

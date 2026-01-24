@@ -53,6 +53,9 @@ constexpr uint32_t g_MaxPrefilterSamples = 64;
 
 void SkyDomeRenderModule::Init(const json& initData)
 {
+    m_CubemapGenerateReady.store(true);
+    m_CubemapCopyReady.store(false);
+
     // Init the right version
     m_IsProcedural = initData.value("Procedural", m_IsProcedural);
 

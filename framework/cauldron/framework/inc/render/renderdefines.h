@@ -27,7 +27,7 @@
 #include <cstdint>
 #include <map>
 #include <vector>
-#include <xstring>
+#include <string>
 
 #define MAX_SHADING_RATES 9
 #define SHADING_RATE_SHIFT 3

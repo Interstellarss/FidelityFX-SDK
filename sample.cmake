@@ -23,13 +23,17 @@
 #Contains everything necessary to bundle together a sample
 
 # Configure icons for use when building apps
-set(default_icon_src 
-    ${CAULDRON_ROOT}/application/icon/GPUOpenChip.ico
-    ${CAULDRON_ROOT}/application/icon/resource.h
-    ${CAULDRON_ROOT}/application/icon/cauldron.rc)
+if (WIN32)
+	set(default_icon_src 
+		${CAULDRON_ROOT}/application/icon/GPUOpenChip.ico
+		${CAULDRON_ROOT}/application/icon/resource.h
+		${CAULDRON_ROOT}/application/icon/cauldron.rc)
 	
-set_source_files_properties(${CAULDRON_ROOT}/application/icon/cauldron.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
-set_source_files_properties(${CAULDRON_ROOT}/application/icon/GPUOpenChip.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
+	set_source_files_properties(${CAULDRON_ROOT}/application/icon/cauldron.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
+	set_source_files_properties(${CAULDRON_ROOT}/application/icon/GPUOpenChip.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
+else()
+	set(default_icon_src "")
+endif()
 
 # Configure default sample files to pull in to avoid having every sample need to duplicate the code
 set(default_sample_files

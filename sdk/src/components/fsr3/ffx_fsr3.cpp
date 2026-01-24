@@ -44,7 +44,9 @@ static FfxFsr3Context* s_Context = nullptr;
 
 FfxErrorCode ffxFsr3ContextCreate(FfxFsr3Context* context, FfxFsr3ContextDescription* contextDescription)
 {
+#if defined(_WIN32)
     FFX_STATIC_ASSERT(sizeof(FfxFsr3Context) >= sizeof(FfxFsr3Context_Private));
+#endif
     FfxErrorCode            ret            = FFX_OK;
     FfxFsr3Context_Private* contextPrivate = (FfxFsr3Context_Private*)(context);
 

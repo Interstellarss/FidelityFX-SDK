@@ -37,11 +37,16 @@
 #include <FidelityFX/host/ffx_fsr3.h>
 
 
+
 // NOTES regarding using win32 objects:
 //   - On Windows, critical section and events are faster than their std counterparts
 //   - using Win32 threads to set the priorities
 //   - this needs to be ported to standard C++ or other platform if necessary
+#ifdef _WIN32
 #include <Windows.h>
+#else
+#include "FrameInterpolationWin32Compat.h"
+#endif
 
 #define FFX_FRAME_INTERPOLATION_SWAP_CHAIN_VERSION                     1
 #define FFX_FRAME_INTERPOLATION_SWAP_CHAIN_MAX_BUFFER_COUNT            6

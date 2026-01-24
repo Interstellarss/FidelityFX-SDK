@@ -38,6 +38,8 @@
 #include "render/profiler.h"
 #include "shaders/lightingcommon.h"
 
+#include <cstdlib>
+
 namespace samplercpp
 {
 #include "../thirdparty/samplercpp/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_256spp.cpp"
@@ -63,6 +65,14 @@ static std::vector<const char*> BuildDebugOptions(bool enable)
     debugOptions.push_back("Visualize Primary Rays");
 
     return debugOptions;
+}
+
+static bool IsEnvEnabled(const char* name)
+{
+    const char* value = std::getenv(name);
+    if (!value || value[0] == '\0')
+        return false;
+    return value[0] != '0';
 }
 
 void HybridReflectionsRenderModule::Init(const json& initData)
@@ -138,6 +148,20 @@ void HybridReflectionsRenderModule::Init(const json& initData)
     {
         m_Mask &= ~HSR_FLAGS_USE_RAY_TRACING;
     }
+#if defined(__linux__)
+    if (m_Mask & HSR_FLAGS_USE_RAY_TRACING)
+    {
+        if (!IsEnvEnabled("CAULDRON_USE_DXC"))
+        {
+            CauldronWarning(L"Disabling ray tracing path on Linux due to shader compiler limitations. Set CAULDRON_USE_DXC=1 to try the ray tracing path.");
+            m_Mask &= ~HSR_FLAGS_USE_RAY_TRACING;
+        }
+        else
+        {
+            CauldronWarning(L"CAULDRON_USE_DXC=1 set. Attempting ray tracing path on Linux.");
+        }
+    }
+#endif
 
     CreateFfxContexts();
 
@@ -150,12 +174,15 @@ void HybridReflectionsRenderModule::Init(const json& initData)
         });
 
     InitPrepareBlueNoise(initData);
-    InitPrimaryRayTracing(initData);
     InitHybridDeferred(initData);
-    InitRTDeferred(initData);
-    InitDeferredShadeRays(initData);
     InitPrepareIndirectHybrid(initData);
-    InitPrepareIndirectHW(initData);
+    if (m_Mask & HSR_FLAGS_USE_RAY_TRACING)
+    {
+        InitPrimaryRayTracing(initData);
+        InitRTDeferred(initData);
+        InitDeferredShadeRays(initData);
+        InitPrepareIndirectHW(initData);
+    }
     InitCopyDepth(initData);
 
     // Register for content change updates
@@ -676,8 +703,10 @@ void HybridReflectionsRenderModule::InitPrimaryRayTracing(const json& initData)
     psoDesc.SetRootSignature(m_pPrimaryRTRootSignature);
 
     // Setup the shaders to build on the pipeline object
-    //psoDesc.AddShaderDesc(ShaderBuildDesc::Compute(L"intersect.hlsl", L"main", ShaderModel::SM6_5, nullptr));
-    psoDesc.AddShaderDesc(ShaderBuildDesc::Compute(L"primary_ray_tracing.hlsl", L"main", ShaderModel::SM6_5, nullptr));
+    DefineList defineList;
+    defineList.insert(std::make_pair(L"USE_INLINE_RAYTRACING", std::to_wstring(1)));
+    //psoDesc.AddShaderDesc(ShaderBuildDesc::Compute(L"intersect.hlsl", L"main", ShaderModel::SM6_5, &defineList));
+    psoDesc.AddShaderDesc(ShaderBuildDesc::Compute(L"primary_ray_tracing.hlsl", L"main", ShaderModel::SM6_5, &defineList));
 
     m_pPrimaryRTPipelineObj = PipelineObject::CreatePipelineObject(L"PrimaryRayTracing_PipelineObj", psoDesc);
 
@@ -692,7 +721,7 @@ void HybridReflectionsRenderModule::InitPrimaryRayTracing(const json& initData)
     ShadowMapResourcePool* pShadowMapResourcePool = GetFramework()->GetShadowMapResourcePool();
     for (uint32_t i = 0; i < pShadowMapResourcePool->GetRenderTargetCount(); ++i)
     {
-        m_pPrimaryRTParameters->SetTextureSRV(pShadowMapResourcePool->GetRenderTarget(i), ViewDimension::Texture2D, SHADOW_MAP_BEGIN_SLOT + i);
+        m_pHybridDeferredParameters->SetTextureSRV(pShadowMapResourcePool->GetRenderTarget(i), ViewDimension::Texture2D, SHADOW_MAP_BEGIN_SLOT + i);
     }
 
     m_pPrimaryRTParameters->SetRootConstantBufferResource(GetDynamicBufferPool()->GetResource(), sizeof(FrameInfo), 0);
@@ -1144,17 +1173,26 @@ void HybridReflectionsRenderModule::Execute(double deltaTime, CommandList* pCmdL
             m_pHybridDeferredParameters->SetTextureSRV(m_pPrefilteredEnvironmentMap, ViewDimension::TextureCube, 2);
             m_pHybridDeferredParameters->SetTextureSRV(m_pIrradianceEnvironmentMap, ViewDimension::TextureCube, 3);
 
-            m_pRTDeferredParameters->SetTextureSRV(m_pBRDFTexture, ViewDimension::Texture2D, 1);
-            m_pRTDeferredParameters->SetTextureSRV(m_pPrefilteredEnvironmentMap, ViewDimension::TextureCube, 2);
-            m_pRTDeferredParameters->SetTextureSRV(m_pIrradianceEnvironmentMap, ViewDimension::TextureCube, 3);
+            if (m_pRTDeferredParameters)
+            {
+                m_pRTDeferredParameters->SetTextureSRV(m_pBRDFTexture, ViewDimension::Texture2D, 1);
+                m_pRTDeferredParameters->SetTextureSRV(m_pPrefilteredEnvironmentMap, ViewDimension::TextureCube, 2);
+                m_pRTDeferredParameters->SetTextureSRV(m_pIrradianceEnvironmentMap, ViewDimension::TextureCube, 3);
+            }
 
-            m_pDeferredShadeRaysParameters->SetTextureSRV(m_pBRDFTexture, ViewDimension::Texture2D, 1);
-            m_pDeferredShadeRaysParameters->SetTextureSRV(m_pPrefilteredEnvironmentMap, ViewDimension::TextureCube, 2);
-            m_pDeferredShadeRaysParameters->SetTextureSRV(m_pIrradianceEnvironmentMap, ViewDimension::TextureCube, 3);
+            if (m_pDeferredShadeRaysParameters)
+            {
+                m_pDeferredShadeRaysParameters->SetTextureSRV(m_pBRDFTexture, ViewDimension::Texture2D, 1);
+                m_pDeferredShadeRaysParameters->SetTextureSRV(m_pPrefilteredEnvironmentMap, ViewDimension::TextureCube, 2);
+                m_pDeferredShadeRaysParameters->SetTextureSRV(m_pIrradianceEnvironmentMap, ViewDimension::TextureCube, 3);
+            }
 
-            m_pPrimaryRTParameters->SetTextureSRV(m_pBRDFTexture, ViewDimension::Texture2D, 3);
-            m_pPrimaryRTParameters->SetTextureSRV(m_pPrefilteredEnvironmentMap, ViewDimension::TextureCube, 4);
-            m_pPrimaryRTParameters->SetTextureSRV(m_pIrradianceEnvironmentMap, ViewDimension::TextureCube, 5);
+            if (m_pPrimaryRTParameters)
+            {
+                m_pPrimaryRTParameters->SetTextureSRV(m_pBRDFTexture, ViewDimension::Texture2D, 3);
+                m_pPrimaryRTParameters->SetTextureSRV(m_pPrefilteredEnvironmentMap, ViewDimension::TextureCube, 4);
+                m_pPrimaryRTParameters->SetTextureSRV(m_pIrradianceEnvironmentMap, ViewDimension::TextureCube, 5);
+            }
         }
         return;
     }
@@ -1200,7 +1238,7 @@ void HybridReflectionsRenderModule::Execute(double deltaTime, CommandList* pCmdL
     }
     ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
 
-    if (m_ShowDebugTarget && (m_Mask & HSR_FLAGS_VISUALIZE_PRIMARY_RAYS))
+    if (m_ShowDebugTarget && (m_Mask & HSR_FLAGS_VISUALIZE_PRIMARY_RAYS) && (m_Mask & HSR_FLAGS_USE_RAY_TRACING) && m_pPrimaryRTPipelineObj)
     {
         ExecutePrimaryRayTracing(deltaTime, pCmdList);
     }
@@ -1964,25 +2002,33 @@ void HybridReflectionsRenderModule::OnNewContentLoaded(ContentBlock* pContentBlo
         const_cast<Buffer*>(m_RTInfoTables.m_pSurfaceBuffer)
             ->CopyData(m_RTInfoTables.m_cpuSurfaceBuffer.data(), m_RTInfoTables.m_cpuSurfaceBuffer.size() * sizeof(Surface_Info));
 
-        m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_pMaterialBuffer, RAYTRACING_INFO_BEGIN_SLOT);
-        m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_pInstanceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 1);
-        m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceIDsBuffer, RAYTRACING_INFO_BEGIN_SLOT + 2);
-        m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 3);
-
+        if (m_pPrimaryRTParameters)
+        {
+            m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_pMaterialBuffer, RAYTRACING_INFO_BEGIN_SLOT);
+            m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_pInstanceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 1);
+            m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceIDsBuffer, RAYTRACING_INFO_BEGIN_SLOT + 2);
+            m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 3);
+        }
         m_pHybridDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pMaterialBuffer, RAYTRACING_INFO_BEGIN_SLOT);
         m_pHybridDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pInstanceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 1);
         m_pHybridDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceIDsBuffer, RAYTRACING_INFO_BEGIN_SLOT + 2);
         m_pHybridDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 3);
 
-        m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pMaterialBuffer, RAYTRACING_INFO_BEGIN_SLOT);
-        m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pInstanceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 1);
-        m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceIDsBuffer, RAYTRACING_INFO_BEGIN_SLOT + 2);
-        m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 3);
+        if (m_pRTDeferredParameters)
+        {
+            m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pMaterialBuffer, RAYTRACING_INFO_BEGIN_SLOT);
+            m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pInstanceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 1);
+            m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceIDsBuffer, RAYTRACING_INFO_BEGIN_SLOT + 2);
+            m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 3);
+        }
 
-        m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_pMaterialBuffer, RAYTRACING_INFO_BEGIN_SLOT);
-        m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_pInstanceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 1);
-        m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceIDsBuffer, RAYTRACING_INFO_BEGIN_SLOT + 2);
-        m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 3);
+        if (m_pDeferredShadeRaysParameters)
+        {
+            m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_pMaterialBuffer, RAYTRACING_INFO_BEGIN_SLOT);
+            m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_pInstanceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 1);
+            m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceIDsBuffer, RAYTRACING_INFO_BEGIN_SLOT + 2);
+            m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_pSurfaceBuffer, RAYTRACING_INFO_BEGIN_SLOT + 3);
+        }
     }
 
     {
@@ -1990,38 +2036,50 @@ void HybridReflectionsRenderModule::OnNewContentLoaded(ContentBlock* pContentBlo
         CauldronAssert(ASSERT_CRITICAL, m_RTInfoTables.m_Textures.size() <= MAX_TEXTURES_COUNT, L"Too many textures.");
         for (uint32_t i = 0; i < m_RTInfoTables.m_Textures.size(); ++i)
         {
-            m_pPrimaryRTParameters->SetTextureSRV(m_RTInfoTables.m_Textures[i].pTexture, ViewDimension::Texture2D, i + TEXTURE_BEGIN_SLOT);
             m_pHybridDeferredParameters->SetTextureSRV(m_RTInfoTables.m_Textures[i].pTexture, ViewDimension::Texture2D, i + TEXTURE_BEGIN_SLOT);
-            m_pRTDeferredParameters->SetTextureSRV(m_RTInfoTables.m_Textures[i].pTexture, ViewDimension::Texture2D, i + TEXTURE_BEGIN_SLOT);
-            m_pDeferredShadeRaysParameters->SetTextureSRV(m_RTInfoTables.m_Textures[i].pTexture, ViewDimension::Texture2D, i + TEXTURE_BEGIN_SLOT);
+            if (m_pPrimaryRTParameters)
+                m_pPrimaryRTParameters->SetTextureSRV(m_RTInfoTables.m_Textures[i].pTexture, ViewDimension::Texture2D, i + TEXTURE_BEGIN_SLOT);
+            if (m_pRTDeferredParameters)
+                m_pRTDeferredParameters->SetTextureSRV(m_RTInfoTables.m_Textures[i].pTexture, ViewDimension::Texture2D, i + TEXTURE_BEGIN_SLOT);
+            if (m_pDeferredShadeRaysParameters)
+                m_pDeferredShadeRaysParameters->SetTextureSRV(m_RTInfoTables.m_Textures[i].pTexture, ViewDimension::Texture2D, i + TEXTURE_BEGIN_SLOT);
         }
 
         // Update sampler bindings as well
         CauldronAssert(ASSERT_CRITICAL, m_RTInfoTables.m_Samplers.size() <= MAX_SAMPLERS_COUNT, L"Too many samplers.");
         for (uint32_t i = 0; i < m_RTInfoTables.m_Samplers.size(); ++i)
         {
-            m_pPrimaryRTParameters->SetSampler(m_RTInfoTables.m_Samplers[i], i + SAMPLER_BEGIN_SLOT);
             m_pHybridDeferredParameters->SetSampler(m_RTInfoTables.m_Samplers[i], i + SAMPLER_BEGIN_SLOT);
-            m_pRTDeferredParameters->SetSampler(m_RTInfoTables.m_Samplers[i], i + SAMPLER_BEGIN_SLOT);
-            m_pDeferredShadeRaysParameters->SetSampler(m_RTInfoTables.m_Samplers[i], i + SAMPLER_BEGIN_SLOT);
+            if (m_pPrimaryRTParameters)
+                m_pPrimaryRTParameters->SetSampler(m_RTInfoTables.m_Samplers[i], i + SAMPLER_BEGIN_SLOT);
+            if (m_pRTDeferredParameters)
+                m_pRTDeferredParameters->SetSampler(m_RTInfoTables.m_Samplers[i], i + SAMPLER_BEGIN_SLOT);
+            if (m_pDeferredShadeRaysParameters)
+                m_pDeferredShadeRaysParameters->SetSampler(m_RTInfoTables.m_Samplers[i], i + SAMPLER_BEGIN_SLOT);
         }
 
         CauldronAssert(ASSERT_CRITICAL, m_RTInfoTables.m_IndexBuffers.size() <= MAX_BUFFER_COUNT, L"Too many index buffers.");
         for (uint32_t i = 0; i < m_RTInfoTables.m_IndexBuffers.size(); ++i)
         {
-            m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_IndexBuffers[i], i + INDEX_BUFFER_BEGIN_SLOT);
             m_pHybridDeferredParameters->SetBufferSRV(m_RTInfoTables.m_IndexBuffers[i], i + INDEX_BUFFER_BEGIN_SLOT);
-            m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_IndexBuffers[i], i + INDEX_BUFFER_BEGIN_SLOT);
-            m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_IndexBuffers[i], i + INDEX_BUFFER_BEGIN_SLOT);
+            if (m_pPrimaryRTParameters)
+                m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_IndexBuffers[i], i + INDEX_BUFFER_BEGIN_SLOT);
+            if (m_pRTDeferredParameters)
+                m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_IndexBuffers[i], i + INDEX_BUFFER_BEGIN_SLOT);
+            if (m_pDeferredShadeRaysParameters)
+                m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_IndexBuffers[i], i + INDEX_BUFFER_BEGIN_SLOT);
         }
 
         CauldronAssert(ASSERT_CRITICAL, m_RTInfoTables.m_VertexBuffers.size() <= MAX_BUFFER_COUNT, L"Too many vertex buffers.");
         for (uint32_t i = 0; i < m_RTInfoTables.m_VertexBuffers.size(); ++i)
         {
-            m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_VertexBuffers[i], i + VERTEX_BUFFER_BEGIN_SLOT);
             m_pHybridDeferredParameters->SetBufferSRV(m_RTInfoTables.m_VertexBuffers[i], i + VERTEX_BUFFER_BEGIN_SLOT);
-            m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_VertexBuffers[i], i + VERTEX_BUFFER_BEGIN_SLOT);
-            m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_VertexBuffers[i], i + VERTEX_BUFFER_BEGIN_SLOT);
+            if (m_pPrimaryRTParameters)
+                m_pPrimaryRTParameters->SetBufferSRV(m_RTInfoTables.m_VertexBuffers[i], i + VERTEX_BUFFER_BEGIN_SLOT);
+            if (m_pRTDeferredParameters)
+                m_pRTDeferredParameters->SetBufferSRV(m_RTInfoTables.m_VertexBuffers[i], i + VERTEX_BUFFER_BEGIN_SLOT);
+            if (m_pDeferredShadeRaysParameters)
+                m_pDeferredShadeRaysParameters->SetBufferSRV(m_RTInfoTables.m_VertexBuffers[i], i + VERTEX_BUFFER_BEGIN_SLOT);
         }
     }
 }

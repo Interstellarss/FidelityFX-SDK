@@ -26,6 +26,8 @@
 namespace cauldron
 {
     RenderModule::RenderModule(const wchar_t* pName) :
+        m_ModuleReady(false),
+        m_ModuleEnabled(true),
         m_Name(pName)
     {
     }

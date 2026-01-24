@@ -29,6 +29,7 @@
 #include "shaders/shadercommon.h"
 #include "render/rtresources.h"
 
+#include <atomic>
 #include <vector>
 
 namespace cauldron
@@ -309,7 +310,7 @@ namespace cauldron
         BoundingBox                 m_BoundingBox;
 
         // IBL Texture
-        const Texture* m_pIBLTexture[IBLTexture::Count] = { nullptr };
+        const Texture* m_pIBLTexture[static_cast<size_t>(IBLTexture::Count)] = { nullptr };
         // BRDF Texture
         const Texture* m_pBRDFTexture = nullptr;
         // ScreenSpace ShadowTexture
@@ -327,7 +328,7 @@ namespace cauldron
         // Acceleration Structure Manager
         ASManager* m_ASManager = nullptr;
 
-        std::atomic_bool            m_SceneReady = false;
+        std::atomic_bool            m_SceneReady;
 
         bool m_BoundingBoxUpdated = true;
     };

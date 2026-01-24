@@ -39,7 +39,11 @@
 #define PATH(x)      RMFOLDER(x)## RMFILE(x)
 
 // Sample render module
+#if defined(RenderModuleHeader)
+#include RenderModuleHeader
+#else
 #include AS_STRING(PATH(RenderModuleName))
+#endif
 
 #endif // #if defined(RenderModuleName)
 
@@ -98,7 +102,11 @@ void Sample::RegisterSampleModules()
 
 #if defined(RenderModuleName)
     // Register sample render module
-    RenderModuleFactory::RegisterModule<RMCLASS(RenderModuleName)>(RMSTRING(RenderModuleName));
+    #if defined(RenderModuleClass)
+        RenderModuleFactory::RegisterModule<RenderModuleClass>(RenderModuleString);
+    #else
+        RenderModuleFactory::RegisterModule<RMCLASS(RenderModuleName)>(RMSTRING(RenderModuleName));
+    #endif
 #endif // #if defined(RenderModuleName)
 }
 

@@ -29,14 +29,24 @@ project(FFX_BREADCRUMBS)
 
 # Import SDK libs
 add_library(ffx_breadcrumbs_native STATIC IMPORTED)
-set_target_properties(ffx_breadcrumbs_native PROPERTIES
-					  IMPORTED_CONFIGURATIONS "DebugDX12;DebugVK;RelWithDebInfoDX12;RelWithDebInfoVK;ReleaseDX12;ReleaseVK"
-					  IMPORTED_LOCATION_DEBUGDX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}d.lib"
-					  IMPORTED_LOCATION_DEBUGVK "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}d.lib"
-					  IMPORTED_LOCATION_RELEASEDX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}.lib"
-					  IMPORTED_LOCATION_RELEASEVK "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}.lib"
-					  IMPORTED_LOCATION_RELWITHDEBINFODX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}drel.lib"
-					  IMPORTED_LOCATION_RELWITHDEBINFOVK "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}drel.lib")
+if (WIN32)
+	set_target_properties(ffx_breadcrumbs_native PROPERTIES
+						  IMPORTED_CONFIGURATIONS "DebugDX12;DebugVK;RelWithDebInfoDX12;RelWithDebInfoVK;ReleaseDX12;ReleaseVK"
+						  IMPORTED_LOCATION_DEBUGDX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}d.lib"
+						  IMPORTED_LOCATION_DEBUGVK "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}d.lib"
+						  IMPORTED_LOCATION_RELEASEDX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}.lib"
+						  IMPORTED_LOCATION_RELEASEVK "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}.lib"
+						  IMPORTED_LOCATION_RELWITHDEBINFODX12 "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}drel.lib"
+						  IMPORTED_LOCATION_RELWITHDEBINFOVK "${SDK_ROOT}/bin/ffx_sdk/ffx_breadcrumbs_${CMAKE_GENERATOR_PLATFORM}drel.lib")
+else()
+	set(FFX_BREADCRUMBS_LIB "${SDK_ROOT}/bin/ffx_sdk/libffx_breadcrumbs_${FFX_PLATFORM_NAME}.a")
+	set(FFX_BREADCRUMBS_LIB_BUILD "${SDK_ROOT}/build-linux/src/components/breadcrumbs/libffx_breadcrumbs_${FFX_PLATFORM_NAME}.a")
+	if (EXISTS "${FFX_BREADCRUMBS_LIB_BUILD}")
+		set(FFX_BREADCRUMBS_LIB "${FFX_BREADCRUMBS_LIB_BUILD}")
+	endif()
+	set_target_properties(ffx_breadcrumbs_native PROPERTIES
+						  IMPORTED_LOCATION "${FFX_BREADCRUMBS_LIB}")
+endif()
 
 # Breadcrumbs render module files
 file(GLOB breadcrumbs_src
@@ -54,27 +64,40 @@ set(config_file ${CMAKE_CURRENT_SOURCE_DIR}/config/breadcrumbsconfig.json)
 copyCommand("${config_file}" ${CONFIG_OUTPUT})
 
 # Add the sample to the solution
-add_executable(${PROJECT_NAME} WIN32 ${default_icon_src} ${default_entry_point} ${default_sample_files} ${config_file} ${breadcrumbs_src} ${breadcrumbs_shaders})
+if (WIN32)
+	add_executable(${PROJECT_NAME} WIN32 ${default_icon_src} ${default_entry_point} ${default_sample_files} ${config_file} ${breadcrumbs_src} ${breadcrumbs_shaders})
+else()
+	add_executable(${PROJECT_NAME} ${default_icon_src} ${default_entry_point} ${default_sample_files} ${config_file} ${breadcrumbs_src} ${breadcrumbs_shaders})
+endif()
 
 # Setup the correct exe based on backend name
 set(EXE_OUT_NAME ${PROJECT_NAME}_)
 
 # Link everything (including the compiler for now)
-target_link_libraries(${PROJECT_NAME} LINK_PUBLIC Framework RenderModules d3dcompiler ffx_breadcrumbs_native backend_interface)
-set_target_properties(${PROJECT_NAME} PROPERTIES
-					OUTPUT_NAME_DEBUGDX12 "${EXE_OUT_NAME}DX12D"
-					OUTPUT_NAME_DEBUGVK "${EXE_OUT_NAME}VKD"
-					OUTPUT_NAME_RELEASEDX12 "${EXE_OUT_NAME}DX12"
-					OUTPUT_NAME_RELEASEVK "${EXE_OUT_NAME}VK"
-                    OUTPUT_NAME_RELWITHDEBINFODX12 "${EXE_OUT_NAME}drelDX12"
-					OUTPUT_NAME_RELWITHDEBINFOVK "${EXE_OUT_NAME}drelVK"
-					VS_DEBUGGER_WORKING_DIRECTORY "${BIN_OUTPUT}")
+if (WIN32)
+	target_link_libraries(${PROJECT_NAME} LINK_PUBLIC Framework RenderModules d3dcompiler ffx_breadcrumbs_native backend_interface)
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+						OUTPUT_NAME_DEBUGDX12 "${EXE_OUT_NAME}DX12D"
+						OUTPUT_NAME_DEBUGVK "${EXE_OUT_NAME}VKD"
+						OUTPUT_NAME_RELEASEDX12 "${EXE_OUT_NAME}DX12"
+						OUTPUT_NAME_RELEASEVK "${EXE_OUT_NAME}VK"
+						OUTPUT_NAME_RELWITHDEBINFODX12 "${EXE_OUT_NAME}drelDX12"
+						OUTPUT_NAME_RELWITHDEBINFOVK "${EXE_OUT_NAME}drelVK"
+						VS_DEBUGGER_WORKING_DIRECTORY "${BIN_OUTPUT}")
+else()
+	target_link_libraries(${PROJECT_NAME} LINK_PUBLIC Framework RenderModules ffx_breadcrumbs_native backend_interface)
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+						OUTPUT_NAME "${EXE_OUT_NAME}VK")
+endif()
 
 # Add compile definitions to identify the sample
 target_compile_definitions(${PROJECT_NAME} PRIVATE SampleName=L"FidelityFX Breadcrumbs v1.0"
 											ConfigFileName=L"configs/breadcrumbsconfig.json"
 											ConfigSampleName="FidelityFX Breadcrumbs"
-											RenderModuleName=Breadcrumbs)
+											RenderModuleName=Breadcrumbs
+											RenderModuleClass=BreadcrumbsRenderModule
+											RenderModuleString="BreadcrumbsRenderModule"
+											RenderModuleHeader="breadcrumbs/breadcrumbsrendermodule.h")
 
 # Add manifest info
 addManifest(${PROJECT_NAME})

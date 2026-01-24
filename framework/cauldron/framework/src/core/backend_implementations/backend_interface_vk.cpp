@@ -120,7 +120,13 @@ size_t ffxGetScratchMemorySize(size_t maxContexts)
 FfxErrorCode ffxGetInterface(FfxInterface* backendInterface, cauldron::Device* device, void* scratchBuffer, size_t scratchBufferSize, size_t maxContexts)
 {
     CAULDRON_ASSERT(s_pFfxGetInterfaceFunc);
-    VkDeviceContext vkDeviceContext = {device->GetImpl()->VKDevice(), device->GetImpl()->VKPhysicalDevice(), vkGetDeviceProcAddr};
+    VkDeviceContext vkDeviceContext = {
+        device->GetImpl()->VKDevice(),
+        device->GetImpl()->VKPhysicalDevice(),
+        device->GetImpl()->VKInstance(),
+        vkGetDeviceProcAddr,
+        vkGetInstanceProcAddr
+    };
     return s_pFfxGetInterfaceFunc(backendInterface, s_pFfxGetDeviceFunc(&vkDeviceContext), scratchBuffer, scratchBufferSize, maxContexts);
 }
 

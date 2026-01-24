@@ -22,16 +22,22 @@
 
 #include "utils.h"
 
+#include <string>
+#include <locale>
+#include <codecvt>
+
+#ifdef _WIN32
+
 std::string WCharToUTF8(const std::wstring& wstr)
 {
     if (wstr.empty())
         return std::string();
 
-    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), wstr.size(), nullptr, 0, nullptr, nullptr);
+    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), nullptr, 0, nullptr, nullptr);
 
     std::string str;
     str.resize(size);
-    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), wstr.size(), &str[0], size, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), &str[0], size, nullptr, nullptr);
 
     return str;
 }
@@ -41,11 +47,33 @@ std::wstring UTF8ToWChar(const std::string& str)
     if (str.empty())
         return std::wstring();
 
-    int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.size(), nullptr, 0);
+    int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), nullptr, 0);
 
     std::wstring wstr;
     wstr.resize(size);
-    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.size(), &wstr[0], size);
+    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), &wstr[0], size);
 
     return wstr;
 }
+
+#else
+
+std::string WCharToUTF8(const std::wstring& wstr)
+{
+    if (wstr.empty())
+        return std::string();
+
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+    return conv.to_bytes(wstr);
+}
+
+std::wstring UTF8ToWChar(const std::string& str)
+{
+    if (str.empty())
+        return std::wstring();
+
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+    return conv.from_bytes(str);
+}
+
+#endif
