@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 // This file is part of the FidelityFX SDK.
 //
 // Copyright (C) 2024 Advanced Micro Devices, Inc.
@@ -334,7 +335,6 @@ static FfxErrorCode patchResourceBindings(FfxPipelineState* inoutPipeline)
             return false;
         return strcmp(value, "1") == 0 || strcmp(value, "true") == 0 || strcmp(value, "TRUE") == 0;
     };
-
     auto wideToAscii = [](const wchar_t* in, char* out, size_t outLen) {
         size_t i = 0;
         if (!outLen) {

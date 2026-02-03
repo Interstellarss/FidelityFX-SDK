@@ -23,9 +23,18 @@
 add_library(dxc INTERFACE)
 target_include_directories(dxc INTERFACE BEFORE "inc/")
 
+set(PLATFORM_DIR ${CMAKE_GENERATOR_PLATFORM})
+if(NOT PLATFORM_DIR)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(PLATFORM_DIR x64)
+    else()
+        set(PLATFORM_DIR x86)
+    endif()
+endif()
+
 set(dxc_binaries
-    ${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_GENERATOR_PLATFORM}/dxcompiler.dll
-    ${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_GENERATOR_PLATFORM}/dxil.dll)
+    ${CMAKE_CURRENT_SOURCE_DIR}/bin/${PLATFORM_DIR}/dxcompiler.dll
+    ${CMAKE_CURRENT_SOURCE_DIR}/bin/${PLATFORM_DIR}/dxil.dll)
 
 copyTargetCommand("${dxc_binaries}" ${BIN_OUTPUT} copied_dxc_bin)
 add_dependencies(dxc copied_dxc_bin)

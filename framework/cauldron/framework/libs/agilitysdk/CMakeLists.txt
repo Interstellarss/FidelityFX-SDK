@@ -23,10 +23,19 @@
 add_library(agilitysdk INTERFACE)
 target_include_directories(agilitysdk INTERFACE BEFORE "include/")
 
+set(PLATFORM_DIR ${CMAKE_GENERATOR_PLATFORM})
+if(NOT PLATFORM_DIR)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(PLATFORM_DIR x64)
+    else()
+        set(PLATFORM_DIR x86)
+    endif()
+endif()
+
 set(agilitysdk_binaries
-    ${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_GENERATOR_PLATFORM}/D3D12Core.dll
-    ${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_GENERATOR_PLATFORM}/d3d12SDKLayers.dll
-	${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_GENERATOR_PLATFORM}/d3dconfig.exe)
+    ${CMAKE_CURRENT_SOURCE_DIR}/bin/${PLATFORM_DIR}/D3D12Core.dll
+    ${CMAKE_CURRENT_SOURCE_DIR}/bin/${PLATFORM_DIR}/d3d12SDKLayers.dll
+	${CMAKE_CURRENT_SOURCE_DIR}/bin/${PLATFORM_DIR}/d3dconfig.exe)
 
 copyTargetCommand("${agilitysdk_binaries}" ${BIN_OUTPUT}/D3D12 copied_agilitysdk_bin)
 add_dependencies(agilitysdk copied_agilitysdk_bin)

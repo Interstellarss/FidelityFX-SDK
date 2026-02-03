@@ -22,6 +22,10 @@
 
 #include "backends.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #ifdef FFX_BACKEND_DX12
 #include <ffx_api/dx12/ffx_api_dx12.h>
 #include <FidelityFX/host/backends/dx12/ffx_dx12.h>
@@ -62,7 +66,34 @@ ffxReturnCode_t CreateBackend(const ffxCreateContextDescHeader *desc, bool& back
             backendFound = true;
 
             const auto *backendDesc = reinterpret_cast<const ffxCreateBackendVKDesc*>(it);
-            VkDeviceContext deviceContext = { backendDesc->vkDevice, backendDesc->vkPhysicalDevice, VK_NULL_HANDLE, backendDesc->vkDeviceProcAddr, nullptr };
+            
+            PFN_vkGetDeviceProcAddr gdpa = backendDesc->vkDeviceProcAddr;
+            if (gdpa == nullptr) {
+                // Try to resolve from global scope if the backend forgot to provide it
+                gdpa = vkGetDeviceProcAddr;
+            }
+            
+            // On Windows, if still null, try to get it from vulkan-1.dll
+#ifdef _WIN32
+            if (gdpa == nullptr) {
+                HMODULE libvulkan = GetModuleHandleA("vulkan-1.dll");
+                if (libvulkan) {
+                    gdpa = (PFN_vkGetDeviceProcAddr)GetProcAddress(libvulkan, "vkGetDeviceProcAddr");
+                }
+            }
+#endif
+
+            VkDeviceContext deviceContext = {};
+            deviceContext.vkDevice = backendDesc->vkDevice;
+            deviceContext.vkPhysicalDevice = backendDesc->vkPhysicalDevice;
+#ifdef __linux__
+            deviceContext.vkInstance = VK_NULL_HANDLE;
+#endif
+            deviceContext.vkDeviceProcAddr = gdpa;
+#ifdef __linux__
+            deviceContext.vkGetInstanceProcAddr = nullptr;
+#endif
+            
             FfxDevice device = ffxGetDeviceVK(&deviceContext);
             size_t scratchBufferSize = ffxGetScratchMemorySizeVK(backendDesc->vkPhysicalDevice, contexts);
             void* scratchBuffer = alloc.alloc(scratchBufferSize);

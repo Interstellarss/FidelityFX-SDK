@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 // This file is part of the FidelityFX SDK.
 //
 // Copyright (C) 2024 Advanced Micro Devices, Inc.
@@ -20,10 +21,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef _WIN32
 #include <volk.h>
+#ifndef _WIN32
+#include <dlfcn.h>
 #endif
 
+#include <cmath>
 #include <FidelityFX/host/ffx_interface.h>
 #include <FidelityFX/host/ffx_util.h>
 #include <FidelityFX/host/ffx_assert.h>
@@ -1741,11 +1744,18 @@ FfxErrorCode CreateBackendContextVK(FfxInterface* backendInterface, FfxEffect ef
         
         // Only try dlsym if we still don't have a valid pointer
         if (!gdpa) {
+#ifdef _WIN32
+             HMODULE libvulkan = GetModuleHandleA("vulkan-1.dll");
+             if (libvulkan) {
+                 gdpa = (PFN_vkGetDeviceProcAddr)GetProcAddress(libvulkan, "vkGetDeviceProcAddr");
+             }
+#else
              void* libvulkan_handle = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
              if (libvulkan_handle) {
                  PFN_vkGetDeviceProcAddr dlsym_gdpa = (PFN_vkGetDeviceProcAddr)dlsym(libvulkan_handle, "vkGetDeviceProcAddr");
                  if (dlsym_gdpa) gdpa = dlsym_gdpa;
              }
+#endif
         }
 
         if (vkDeviceContext->vkDevice != VK_NULL_HANDLE) {
@@ -1853,6 +1863,7 @@ FfxErrorCode CreateBackendContextVK(FfxInterface* backendInterface, FfxEffect ef
         //    backendContext->vkFunctionTable.vkGetPhysicalDeviceMemoryProperties = (PFN_vkGetPhysicalDeviceMemoryProperties)vkDeviceContext->vkGetInstanceProcAddr(vkDeviceContext->vkInstance, "vkGetPhysicalDeviceMemoryProperties");
         // } else {
              // Fallback to dlsym to avoid variable/function conflict with volk
+#ifndef _WIN32
              void* libvulkan = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
              if (libvulkan) {
                  backendContext->vkFunctionTable.vkGetPhysicalDeviceProperties = (PFN_vkGetPhysicalDeviceProperties)dlsym(libvulkan, "vkGetPhysicalDeviceProperties");
@@ -1862,6 +1873,7 @@ FfxErrorCode CreateBackendContextVK(FfxInterface* backendInterface, FfxEffect ef
              } else {
                  FFX_LOG("[FFX-VK] Failed to dlopen libvulkan.so.1\n");
              }
+#endif
         // }
 
         if (!backendContext->vkFunctionTable.vkGetPhysicalDeviceProperties) backendContext->vkFunctionTable.vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties;

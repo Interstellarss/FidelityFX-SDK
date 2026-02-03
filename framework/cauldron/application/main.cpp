@@ -64,7 +64,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 {
     // Create the sample and kick it off to the framework to run
     FrameworkInitParams initParams  = { };
-    initParams.Name                 = SampleName;
+    initParams.Name                 = const_cast<wchar_t*>(SampleName);
     initParams.CmdLine              = lpCmdLine;
     initParams.AdditionalParams     = &s_WindowsParams;
 

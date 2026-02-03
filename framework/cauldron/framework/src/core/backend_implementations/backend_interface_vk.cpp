@@ -123,9 +123,13 @@ FfxErrorCode ffxGetInterface(FfxInterface* backendInterface, cauldron::Device* d
     VkDeviceContext vkDeviceContext = {
         device->GetImpl()->VKDevice(),
         device->GetImpl()->VKPhysicalDevice(),
+#ifdef __linux__
         device->GetImpl()->VKInstance(),
+#endif
         vkGetDeviceProcAddr,
+#ifdef __linux__
         vkGetInstanceProcAddr
+#endif
     };
     return s_pFfxGetInterfaceFunc(backendInterface, s_pFfxGetDeviceFunc(&vkDeviceContext), scratchBuffer, scratchBufferSize, maxContexts);
 }
