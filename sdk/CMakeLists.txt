@@ -173,8 +173,12 @@ endif()
 
 # Setup common variables
 if (UNIX AND NOT WIN32)
-    # On non-Windows platforms, use the native shader compiler built in tools/ffx_shader_compiler.
-    set(FFX_SC_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/ffx_shader_compiler/bin/FidelityFX_SC)
+    # On non-Windows platforms, build the shader compiler from source
+    if(NOT TARGET FidelityFX_SC)
+        add_subdirectory(tools/ffx_shader_compiler)
+    endif()
+    # Point to the built executable in the build directory
+    set(FFX_SC_EXECUTABLE $<TARGET_FILE:FidelityFX_SC>)
 else()
     set(FFX_SC_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/binary_store/FidelityFX_SC.exe)
 endif()

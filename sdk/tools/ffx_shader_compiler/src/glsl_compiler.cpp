@@ -42,9 +42,9 @@ std::string MD5HashString(unsigned char* sig)
     char* out_ptr = out;
     std::stringstream ss;
 
-    for (int i = 0; i < MD5_SIZE; i++)
+    for (size_t i = 0; i < MD5_SIZE; i++)
     {
-        std::snprintf(out_ptr, 32, "%02x", sig[i]);
+        std::snprintf(out_ptr, 3, "%02x", sig[i]);
         out_ptr += 2;
     }
 
@@ -175,8 +175,6 @@ bool GLSLCompiler::Compile(Permutation& permutation, const std::vector<std::stri
 
     permutation.shaderBinary = std::shared_ptr<GLSLShaderBinary>(glslShaderBinary);
 
-    bool compileSuccessful = false;
-
     struct ErrorData
     {
         std::string error;
@@ -196,7 +194,7 @@ bool GLSLCompiler::Compile(Permutation& permutation, const std::vector<std::stri
     }
 
     std::vector<fs::path> includeSearchPaths;
-    for (int i = 0; i < arguments.size(); i++)
+    for (size_t i = 0; i < arguments.size(); i++)
     {
         if (arguments[i][0] == '-' && arguments[i][1] == 'I')
         {
@@ -277,7 +275,7 @@ bool GLSLCompiler::Compile(Permutation& permutation, const std::vector<std::stri
     {
         writeMutex.lock();
 
-        fprintf(stderr, "%s[%lu]\n", m_ShaderFileName.c_str(), permutation.key);
+        fprintf(stderr, "%s[%u]\n", m_ShaderFileName.c_str(), (uint32_t)permutation.key);
 
         for (size_t i = 1; i < errors.size(); i++)
         {
@@ -347,11 +345,11 @@ bool GLSLCompiler::ExtractReflectionData(Permutation& permutation)
     result = spvReflectEnumerateDescriptorSets(&reflectShaderModule, &count, sets.data());
     assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
-    for (int setIdx = 0; setIdx < sets.size(); setIdx++)
+    for (size_t setIdx = 0; setIdx < sets.size(); setIdx++)
     {
         SpvReflectDescriptorSet* ds = sets[setIdx];
 
-        for (int bindingIdx = 0; bindingIdx < ds->binding_count; bindingIdx++)
+        for (uint32_t bindingIdx = 0; bindingIdx < ds->binding_count; bindingIdx++)
         {
             SpvReflectDescriptorBinding* binding = ds->bindings[bindingIdx];
             ShaderResourceInfo resourceInfo = {binding->name ? binding->name : "", binding->binding, binding->count, ds->set};
@@ -408,7 +406,7 @@ void GLSLCompiler::WriteBinaryHeaderReflectionData(FILE* fp, const Permutation& 
             {
                 fprintf(fp, "static const char* g_%s_%sResourceNames[] = { ", permutationName.c_str(), resourceTypeString.c_str());
 
-                for (int j = 0; j < resourceInfo.size(); j++)
+                for (size_t j = 0; j < resourceInfo.size(); j++)
                 {
                     const ShaderResourceInfo& info = resourceInfo[j];
 
@@ -419,33 +417,33 @@ void GLSLCompiler::WriteBinaryHeaderReflectionData(FILE* fp, const Permutation& 
 
                 fprintf(fp, "static const uint32_t g_%s_%sResourceBindings[] = { ", permutationName.c_str(), resourceTypeString.c_str());
 
-                for (int j = 0; j < resourceInfo.size(); j++)
+                for (size_t j = 0; j < resourceInfo.size(); j++)
                 {
                     const ShaderResourceInfo& info = resourceInfo[j];
 
-                    fprintf(fp, " %i,", info.binding);
+                    fprintf(fp, " %u,", info.binding);
                 }
 
                 fprintf(fp, " };\n");
 
                 fprintf(fp, "static const uint32_t g_%s_%sResourceCounts[] = { ", permutationName.c_str(), resourceTypeString.c_str());
 
-                for (int j = 0; j < resourceInfo.size(); j++)
+                for (size_t j = 0; j < resourceInfo.size(); j++)
                 {
                     const ShaderResourceInfo& info = resourceInfo[j];
 
-                    fprintf(fp, " %i,", info.count);
+                    fprintf(fp, " %u,", info.count);
                 }
 
                 fprintf(fp, " };\n");
 
                 fprintf(fp, "static const uint32_t g_%s_%sResourceSets[] = { ", permutationName.c_str(), resourceTypeString.c_str());
 
-                for (int j = 0; j < resourceInfo.size(); j++)
+                for (size_t j = 0; j < resourceInfo.size(); j++)
                 {
                     const ShaderResourceInfo& info = resourceInfo[j];
 
-                    fprintf(fp, " %i,", info.space);
+                    fprintf(fp, " %u,", info.space);
                 }
 
                 fprintf(fp, " };\n\n");
@@ -524,7 +522,7 @@ void GLSLCompiler::WritePermutationHeaderReflectionData(FILE* fp, const Permutat
 {
     IReflectionData* glslReflectionData = dynamic_cast<IReflectionData*>(permutation.reflectionData.get());
 
-    const auto WriteResourceInfo = [](FILE* fp, const int& numResources, const std::string& permutationName, const std::string& resourceTypeString) {
+    const auto WriteResourceInfo = [](FILE* fp, size_t numResources, const std::string& permutationName, const std::string& resourceTypeString) {
         if (numResources == 0)
         {
             fprintf(fp, "0, 0, 0, 0, 0, ");
@@ -532,8 +530,8 @@ void GLSLCompiler::WritePermutationHeaderReflectionData(FILE* fp, const Permutat
         else
         {
             fprintf(fp,
-                    "%i, g_%s_%sResourceNames, g_%s_%sResourceBindings, g_%s_%sResourceCounts, g_%s_%sResourceSets, ",
-                    numResources,
+                    "%u, g_%s_%sResourceNames, g_%s_%sResourceBindings, g_%s_%sResourceCounts, g_%s_%sResourceSets, ",
+                    (uint32_t)numResources,
                     permutationName.c_str(),
                     resourceTypeString.c_str(),
                     permutationName.c_str(),

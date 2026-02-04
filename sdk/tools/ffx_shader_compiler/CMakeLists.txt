@@ -62,8 +62,11 @@ if(MSVC)
     endif()
 endif()
 
-# Generate the output binary in the /bin directory
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_HOME_DIRECTORY}/bin)
+# Generate the output binary in the local /bin directory within the source tree
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
+# Also set for multi-config generators (like VS)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
 # Copies a set of files to a directory (only if they already don't exist or are different)
 # Usage example:
