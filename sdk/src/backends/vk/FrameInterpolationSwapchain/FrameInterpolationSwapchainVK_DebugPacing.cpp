@@ -20,7 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include <vulkan/vulkan.h>
+#ifndef VK_NO_PROTOTYPES
+#define VK_NO_PROTOTYPES
+#endif
+#include <volk.h>
 #include "FrameInterpolationSwapchainVK_DebugPacing.h"
 #include "FrameInterpolationSwapchainVK_Helpers.h"
 #include "FrameInterpolationSwapchainVK.h"

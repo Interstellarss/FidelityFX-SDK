@@ -22,7 +22,10 @@
 
 #pragma once
 
-#include <vulkan/vulkan.h>
+#ifndef VK_NO_PROTOTYPES
+#define VK_NO_PROTOTYPES
+#endif
+#include <volk.h>
 #include <cmath>
 #include <mutex>
 

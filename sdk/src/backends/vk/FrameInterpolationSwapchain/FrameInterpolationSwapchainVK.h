@@ -26,7 +26,10 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #endif  // _WIN32
 
-#include <vulkan/vulkan.h>
+#ifndef VK_NO_PROTOTYPES
+#define VK_NO_PROTOTYPES
+#endif
+#include <volk.h>
 
 #include <atomic>
 #include <cstdint>
