@@ -592,21 +592,49 @@ void LaunchParameters::ParsePermutationOption(PermutationOption& outPermutationO
 )
 {
 #ifdef _WIN32
-    size_t equalPos                 = arg.find_first_of(L"=", 0);
-    outPermutationOption.definition = arg.substr(2, equalPos - 2);
+    std::wstring permutationArg = arg;
+    size_t       escapedBracePos = 0;
+    while ((escapedBracePos = permutationArg.find(L"\\{", escapedBracePos)) != std::wstring::npos)
+        permutationArg.erase(escapedBracePos, 1);
+    escapedBracePos = 0;
+    while ((escapedBracePos = permutationArg.find(L"\\}", escapedBracePos)) != std::wstring::npos)
+        permutationArg.erase(escapedBracePos, 1);
+
+    size_t equalPos                 = permutationArg.find_first_of(L"=", 0);
+    if (equalPos == std::wstring::npos || equalPos <= 2)
+        throw std::runtime_error("Invalid permutation option, expected -DNAME={...}");
+    outPermutationOption.definition = permutationArg.substr(2, equalPos - 2);
     outPermutationOption.definitionUtf8 = WCharToUTF8(outPermutationOption.definition);
 
-    size_t       openBracePos      = arg.find_first_of(L"{", 0);
-    std::wstring multiOptionSubStr = arg.substr(openBracePos + 1, arg.length() - openBracePos - 2);
+    size_t       openBracePos      = permutationArg.find_first_of(L"{", 0);
+    size_t       closeBracePos     = permutationArg.find_last_of(L"}");
+    if (openBracePos == std::wstring::npos || closeBracePos == std::wstring::npos ||
+        closeBracePos <= openBracePos + 1)
+        throw std::runtime_error("Invalid permutation option, expected -DNAME={VALUE,...}");
+    std::wstring multiOptionSubStr = permutationArg.substr(openBracePos + 1, closeBracePos - openBracePos - 1);
 
     Split(multiOptionSubStr, L",", outPermutationOption.values);
 #else
-    size_t equalPos                 = arg.find_first_of("=", 0);
-    outPermutationOption.definition = arg.substr(2, equalPos - 2);
+    std::string permutationArg = arg;
+    size_t      escapedBracePos = 0;
+    while ((escapedBracePos = permutationArg.find("\\{", escapedBracePos)) != std::string::npos)
+        permutationArg.erase(escapedBracePos, 1);
+    escapedBracePos = 0;
+    while ((escapedBracePos = permutationArg.find("\\}", escapedBracePos)) != std::string::npos)
+        permutationArg.erase(escapedBracePos, 1);
+
+    size_t equalPos                 = permutationArg.find_first_of("=", 0);
+    if (equalPos == std::string::npos || equalPos <= 2)
+        throw std::runtime_error("Invalid permutation option, expected -DNAME={...}");
+    outPermutationOption.definition = permutationArg.substr(2, equalPos - 2);
     outPermutationOption.definitionUtf8 = outPermutationOption.definition;
 
-    size_t       openBracePos      = arg.find_first_of("{", 0);
-    std::string multiOptionSubStr = arg.substr(openBracePos + 1, arg.length() - openBracePos - 2);
+    size_t       openBracePos      = permutationArg.find_first_of("{", 0);
+    size_t       closeBracePos     = permutationArg.find_last_of("}");
+    if (openBracePos == std::string::npos || closeBracePos == std::string::npos ||
+        closeBracePos <= openBracePos + 1)
+        throw std::runtime_error("Invalid permutation option, expected -DNAME={VALUE,...}");
+    std::string multiOptionSubStr = permutationArg.substr(openBracePos + 1, closeBracePos - openBracePos - 1);
 
     Split(multiOptionSubStr, ",", outPermutationOption.values);
 #endif
