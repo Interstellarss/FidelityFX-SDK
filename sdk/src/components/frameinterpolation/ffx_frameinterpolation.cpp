@@ -39,6 +39,7 @@
 
 #include "ffx_frameinterpolation_private.h"
 #include <cstring>
+#include <cwchar>
 
 // lists to map shader resource bindpoint name to resource identifier
 typedef struct ResourceBinding
@@ -46,6 +47,12 @@ typedef struct ResourceBinding
     uint32_t    index;
     wchar_t     name[64];
 }ResourceBinding;
+
+enum class ResourceBindingKind
+{
+    Srv,
+    Uav,
+};
 
 static const ResourceBinding srvResourceBindingTable[] =
 {
@@ -114,6 +121,103 @@ static const ResourceBinding cbResourceBindingTable[] =
     {FFX_FRAMEINTERPOLATION_INPAINTING_PYRAMID_CONSTANTBUFFER_IDENTIFIER,                   L"cbInpaintingPyramid"},
 };
 
+static size_t getResourceBindingNameLength(const wchar_t* name)
+{
+    size_t length = 0;
+    while (length < FFX_RESOURCE_NAME_SIZE && name[length] != L'\0')
+        length++;
+    return length;
+}
+
+static uint32_t resolveAmbiguousResourceBinding(const FfxPipelineState* pipeline, const FfxResourceBinding& binding, ResourceBindingKind kind)
+{
+    if (kind == ResourceBindingKind::Srv)
+    {
+        if (0 == wcscmp(pipeline->name, L"INTERPOLATION") || 0 == wcscmp(pipeline->name, L"DEBUG_VIEW"))
+        {
+            if (binding.slotIndex == 2)
+                return FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_X;
+            if (binding.slotIndex == 3)
+                return FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_Y;
+        }
+    }
+    else if (kind == ResourceBindingKind::Uav)
+    {
+        if (0 == wcscmp(pipeline->name, L"SETUP"))
+        {
+            if (binding.slotIndex == 3)
+                return FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_X;
+            if (binding.slotIndex == 4)
+                return FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_Y;
+        }
+
+        if (0 == wcscmp(pipeline->name, L"OPTICAL_FLOW_VECTOR_FIELD"))
+        {
+            if (binding.slotIndex == 6)
+                return FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_X;
+            if (binding.slotIndex == 7)
+                return FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_Y;
+        }
+    }
+
+    return FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL;
+}
+
+static bool findResourceIdentifier(const FfxPipelineState* pipeline, const ResourceBinding* table, size_t tableSize, const FfxResourceBinding& binding, ResourceBindingKind kind, uint32_t* outResourceIdentifier)
+{
+    const size_t bindingNameLength = getResourceBindingNameLength(binding.name);
+    const bool isTruncatedBindingName = bindingNameLength == FFX_RESOURCE_NAME_SIZE - 1;
+    uint32_t prefixMatchCount = 0;
+    uint32_t prefixMatchIdentifier = FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL;
+
+    for (size_t mapIndex = 0; mapIndex < tableSize; ++mapIndex)
+    {
+        if (0 == wcscmp(table[mapIndex].name, binding.name))
+        {
+            *outResourceIdentifier = table[mapIndex].index;
+            return true;
+        }
+
+        if (isTruncatedBindingName && 0 == wcsncmp(table[mapIndex].name, binding.name, bindingNameLength))
+        {
+            prefixMatchCount++;
+            prefixMatchIdentifier = table[mapIndex].index;
+        }
+    }
+
+    if (prefixMatchCount == 1)
+    {
+        *outResourceIdentifier = prefixMatchIdentifier;
+        return true;
+    }
+
+    if (prefixMatchCount > 1)
+    {
+        const uint32_t resourceIdentifier = resolveAmbiguousResourceBinding(pipeline, binding, kind);
+        if (resourceIdentifier != FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL)
+        {
+            *outResourceIdentifier = resourceIdentifier;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool findResourceIdentifier(const ResourceBinding* table, size_t tableSize, const FfxResourceBinding& binding, uint32_t* outResourceIdentifier)
+{
+    for (size_t mapIndex = 0; mapIndex < tableSize; ++mapIndex)
+    {
+        if (0 == wcscmp(table[mapIndex].name, binding.name))
+        {
+            *outResourceIdentifier = table[mapIndex].index;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // Broad structure of the root signature.
 typedef enum FrameInterpolationRootSignatureLayout {
 
@@ -154,73 +258,48 @@ static FfxErrorCode patchResourceBindings(FfxPipelineState* inoutPipeline)
 {
     for (uint32_t srvIndex = 0; srvIndex < inoutPipeline->srvTextureCount; ++srvIndex)
     {
-        int32_t mapIndex = 0;
-        for (mapIndex = 0; mapIndex < _countof(srvResourceBindingTable); ++mapIndex)
-        {
-            if (0 == wcscmp(srvResourceBindingTable[mapIndex].name, inoutPipeline->srvTextureBindings[srvIndex].name))
-                break;
-        }
-        if (mapIndex == _countof(srvResourceBindingTable))
+        uint32_t resourceIdentifier = FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL;
+        if (!findResourceIdentifier(inoutPipeline, srvResourceBindingTable, _countof(srvResourceBindingTable), inoutPipeline->srvTextureBindings[srvIndex], ResourceBindingKind::Srv, &resourceIdentifier))
             return FFX_ERROR_INVALID_ARGUMENT;
 
-        inoutPipeline->srvTextureBindings[srvIndex].resourceIdentifier = srvResourceBindingTable[mapIndex].index;
+        inoutPipeline->srvTextureBindings[srvIndex].resourceIdentifier = resourceIdentifier;
     }
 
     // check for UAVs where mip chains are to be bound
     for (uint32_t uavIndex = 0; uavIndex < inoutPipeline->uavTextureCount; ++uavIndex)
     {
-        int32_t mapIndex = 0;
-        for (mapIndex = 0; mapIndex < _countof(uavResourceBindingTable); ++mapIndex)
-        {
-            if (0 == wcscmp(uavResourceBindingTable[mapIndex].name, inoutPipeline->uavTextureBindings[uavIndex].name))
-                break;
-        }
-        if (mapIndex == _countof(uavResourceBindingTable))
+        uint32_t resourceIdentifier = FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL;
+        if (!findResourceIdentifier(inoutPipeline, uavResourceBindingTable, _countof(uavResourceBindingTable), inoutPipeline->uavTextureBindings[uavIndex], ResourceBindingKind::Uav, &resourceIdentifier))
             return FFX_ERROR_INVALID_ARGUMENT;
 
-        inoutPipeline->uavTextureBindings[uavIndex].resourceIdentifier = uavResourceBindingTable[mapIndex].index;
+        inoutPipeline->uavTextureBindings[uavIndex].resourceIdentifier = resourceIdentifier;
     }
 
     for (uint32_t cbIndex = 0; cbIndex < inoutPipeline->constCount; ++cbIndex)
     {
-        int32_t mapIndex = 0;
-        for (mapIndex = 0; mapIndex < _countof(cbResourceBindingTable); ++mapIndex)
-        {
-            if (0 == wcscmp(cbResourceBindingTable[mapIndex].name, inoutPipeline->constantBufferBindings[cbIndex].name))
-                break;
-        }
-        if (mapIndex == _countof(cbResourceBindingTable))
+        uint32_t resourceIdentifier = FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL;
+        if (!findResourceIdentifier(cbResourceBindingTable, _countof(cbResourceBindingTable), inoutPipeline->constantBufferBindings[cbIndex], &resourceIdentifier))
             return FFX_ERROR_INVALID_ARGUMENT;
 
-        inoutPipeline->constantBufferBindings[cbIndex].resourceIdentifier = cbResourceBindingTable[mapIndex].index;
+        inoutPipeline->constantBufferBindings[cbIndex].resourceIdentifier = resourceIdentifier;
     }
 
     for (uint32_t uavBufferIndex = 0; uavBufferIndex < inoutPipeline->uavBufferCount; ++uavBufferIndex)
     {
-        int32_t mapIndex = 0;
-        for (mapIndex = 0; mapIndex < _countof(uavResourceBindingTable); ++mapIndex)
-        {
-            if (0 == wcscmp(uavResourceBindingTable[mapIndex].name, inoutPipeline->uavBufferBindings[uavBufferIndex].name))
-                break;
-        }
-        if (mapIndex == _countof(uavResourceBindingTable))
+        uint32_t resourceIdentifier = FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL;
+        if (!findResourceIdentifier(inoutPipeline, uavResourceBindingTable, _countof(uavResourceBindingTable), inoutPipeline->uavBufferBindings[uavBufferIndex], ResourceBindingKind::Uav, &resourceIdentifier))
             return FFX_ERROR_INVALID_ARGUMENT;
 
-        inoutPipeline->uavBufferBindings[uavBufferIndex].resourceIdentifier = uavResourceBindingTable[mapIndex].index;
+        inoutPipeline->uavBufferBindings[uavBufferIndex].resourceIdentifier = resourceIdentifier;
     }
 
     for (uint32_t srvBufferIndex = 0; srvBufferIndex < inoutPipeline->srvBufferCount; ++srvBufferIndex)
     {
-        int32_t mapIndex = 0;
-        for (mapIndex = 0; mapIndex < _countof(srvResourceBindingTable); ++mapIndex)
-        {
-            if (0 == wcscmp(srvResourceBindingTable[mapIndex].name, inoutPipeline->srvBufferBindings[srvBufferIndex].name))
-                break;
-        }
-        if (mapIndex == _countof(srvResourceBindingTable))
+        uint32_t resourceIdentifier = FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL;
+        if (!findResourceIdentifier(inoutPipeline, srvResourceBindingTable, _countof(srvResourceBindingTable), inoutPipeline->srvBufferBindings[srvBufferIndex], ResourceBindingKind::Srv, &resourceIdentifier))
             return FFX_ERROR_INVALID_ARGUMENT;
 
-        inoutPipeline->srvBufferBindings[srvBufferIndex].resourceIdentifier = srvResourceBindingTable[mapIndex].index;
+        inoutPipeline->srvBufferBindings[srvBufferIndex].resourceIdentifier = resourceIdentifier;
     }
 
 
@@ -298,7 +377,7 @@ static FfxErrorCode createPipelineStates(FfxFrameInterpolationContext_Private* c
             &pipelineDescription,
             context->effectContextId,
             pipeline));
-        patchResourceBindings(pipeline);
+        FFX_VALIDATE(patchResourceBindings(pipeline));
 
         return FFX_OK;
     };
@@ -315,22 +394,23 @@ static FfxErrorCode createPipelineStates(FfxFrameInterpolationContext_Private* c
             &pipelineDescription,
             context->effectContextId,
             pipeline));
+        FFX_VALIDATE(patchResourceBindings(pipeline));
 
         return FFX_OK;
     };
 
     // Frame Interpolation Pipelines
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_RECONSTRUCT_AND_DILATE,               L"RECONSTRUCT_AND_DILATE", &context->pipelineFiReconstructAndDilate);
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_SETUP,                                L"SETUP", &context->pipelineFiSetup);
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_RECONSTRUCT_PREV_DEPTH,               L"RECONSTRUCT_PREV_DEPTH", &context->pipelineFiReconstructPreviousDepth);
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_GAME_MOTION_VECTOR_FIELD,             L"GAME_MOTION_VECTOR_FIELD", &context->pipelineFiGameMotionVectorField);
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_OPTICAL_FLOW_VECTOR_FIELD,            L"OPTICAL_FLOW_VECTOR_FIELD", &context->pipelineFiOpticalFlowVectorField);
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_DISOCCLUSION_MASK,                    L"DISOCCLUSION_MASK", &context->pipelineFiDisocclusionMask);
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_INTERPOLATION,                        L"INTERPOLATION", &context->pipelineFiScfi);
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_INPAINTING_PYRAMID,                   L"INPAINTING_PYRAMID", &context->pipelineInpaintingPyramid);
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_INPAINTING,                           L"INPAINTING", &context->pipelineInpainting);
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_GAME_VECTOR_FIELD_INPAINTING_PYRAMID, L"GAME_VECTOR_FIELD_INPAINTING_PYRAMID", & context->pipelineGameVectorFieldInpaintingPyramid);
-    CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_DEBUG_VIEW,                           L"DEBUG_VIEW", &context->pipelineDebugView);
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_RECONSTRUCT_AND_DILATE,               L"RECONSTRUCT_AND_DILATE", &context->pipelineFiReconstructAndDilate));
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_SETUP,                                L"SETUP", &context->pipelineFiSetup));
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_RECONSTRUCT_PREV_DEPTH,               L"RECONSTRUCT_PREV_DEPTH", &context->pipelineFiReconstructPreviousDepth));
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_GAME_MOTION_VECTOR_FIELD,             L"GAME_MOTION_VECTOR_FIELD", &context->pipelineFiGameMotionVectorField));
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_OPTICAL_FLOW_VECTOR_FIELD,            L"OPTICAL_FLOW_VECTOR_FIELD", &context->pipelineFiOpticalFlowVectorField));
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_DISOCCLUSION_MASK,                    L"DISOCCLUSION_MASK", &context->pipelineFiDisocclusionMask));
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_INTERPOLATION,                        L"INTERPOLATION", &context->pipelineFiScfi));
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_INPAINTING_PYRAMID,                   L"INPAINTING_PYRAMID", &context->pipelineInpaintingPyramid));
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_INPAINTING,                           L"INPAINTING", &context->pipelineInpainting));
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_GAME_VECTOR_FIELD_INPAINTING_PYRAMID, L"GAME_VECTOR_FIELD_INPAINTING_PYRAMID", & context->pipelineGameVectorFieldInpaintingPyramid));
+    FFX_VALIDATE(CreateComputePipeline(FFX_FRAMEINTERPOLATION_PASS_DEBUG_VIEW,                           L"DEBUG_VIEW", &context->pipelineDebugView));
 
     return FFX_OK;
 }
@@ -927,7 +1007,7 @@ FFX_API FfxErrorCode ffxFrameInterpolationDispatch(FfxFrameInterpolationContext*
 
     if (contextPrivate->refreshPipelineStates) {
 
-        createPipelineStates(contextPrivate);
+        FFX_VALIDATE(createPipelineStates(contextPrivate));
         contextPrivate->refreshPipelineStates = false;
     }
 

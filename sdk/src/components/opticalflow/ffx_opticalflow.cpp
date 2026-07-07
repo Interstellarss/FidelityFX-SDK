@@ -41,6 +41,7 @@
 
 #include "ffx_opticalflow_private.h"
 #include <cstring>
+#include <cwchar>
 
 typedef struct Binding
 {
@@ -80,6 +81,45 @@ static const Binding cbBindingNames[] =
     {FFX_OPTICALFLOW_CONSTANTBUFFER_IDENTIFIER_SPD,   L"cbOF_SPD"}
 };
 
+static size_t getBindingNameLength(const wchar_t* name)
+{
+    size_t length = 0;
+    while (length < FFX_RESOURCE_NAME_SIZE && name[length] != L'\0')
+        length++;
+    return length;
+}
+
+static bool findBindingIdentifier(const Binding* table, size_t tableSize, const FfxResourceBinding& binding, uint32_t* outResourceIdentifier)
+{
+    const size_t bindingNameLength = getBindingNameLength(binding.name);
+    const bool isTruncatedBindingName = bindingNameLength == FFX_RESOURCE_NAME_SIZE - 1;
+    uint32_t prefixMatchCount = 0;
+    uint32_t prefixMatchIdentifier = FFX_OF_BINDING_IDENTIFIER_NULL;
+
+    for (size_t mapIndex = 0; mapIndex < tableSize; ++mapIndex)
+    {
+        if (0 == wcscmp(table[mapIndex].name, binding.name))
+        {
+            *outResourceIdentifier = table[mapIndex].index;
+            return true;
+        }
+
+        if (isTruncatedBindingName && 0 == wcsncmp(table[mapIndex].name, binding.name, bindingNameLength))
+        {
+            prefixMatchCount++;
+            prefixMatchIdentifier = table[mapIndex].index;
+        }
+    }
+
+    if (prefixMatchCount == 1)
+    {
+        *outResourceIdentifier = prefixMatchIdentifier;
+        return true;
+    }
+
+    return false;
+}
+
 // Broad structure of the root signature.
 typedef enum OpticalFlowRootSignatureLayout {
 
@@ -107,47 +147,29 @@ static FfxErrorCode patchResourceBindings(FfxPipelineState* inoutPipeline)
 {
     for (uint32_t srvIndex = 0; srvIndex < inoutPipeline->srvTextureCount; ++srvIndex)
     {
-        int32_t mapIndex = 0;
-        for (mapIndex = 0; mapIndex < _countof(srvBindingNames); ++mapIndex)
-        {
-            if (0 == wcscmp(srvBindingNames[mapIndex].name, inoutPipeline->srvTextureBindings[srvIndex].name))
-                break;
-        }
-        FFX_ASSERT(mapIndex < _countof(srvBindingNames));
-        if (mapIndex == _countof(srvBindingNames))
+        uint32_t resourceIdentifier = FFX_OF_BINDING_IDENTIFIER_NULL;
+        if (!findBindingIdentifier(srvBindingNames, _countof(srvBindingNames), inoutPipeline->srvTextureBindings[srvIndex], &resourceIdentifier))
             return FFX_ERROR_INVALID_ARGUMENT;
 
-        inoutPipeline->srvTextureBindings[srvIndex].resourceIdentifier = srvBindingNames[mapIndex].index;
+        inoutPipeline->srvTextureBindings[srvIndex].resourceIdentifier = resourceIdentifier;
     }
 
     for (uint32_t uavIndex = 0; uavIndex < inoutPipeline->uavTextureCount; ++uavIndex)
     {
-        int32_t mapIndex = 0;
-        for (mapIndex = 0; mapIndex < _countof(uavBindingNames); ++mapIndex)
-        {
-            if (0 == wcscmp(uavBindingNames[mapIndex].name, inoutPipeline->uavTextureBindings[uavIndex].name))
-                break;
-        }
-        FFX_ASSERT(mapIndex < _countof(uavBindingNames));
-        if (mapIndex == _countof(uavBindingNames))
+        uint32_t resourceIdentifier = FFX_OF_BINDING_IDENTIFIER_NULL;
+        if (!findBindingIdentifier(uavBindingNames, _countof(uavBindingNames), inoutPipeline->uavTextureBindings[uavIndex], &resourceIdentifier))
             return FFX_ERROR_INVALID_ARGUMENT;
 
-        inoutPipeline->uavTextureBindings[uavIndex].resourceIdentifier = uavBindingNames[mapIndex].index;
+        inoutPipeline->uavTextureBindings[uavIndex].resourceIdentifier = resourceIdentifier;
     }
 
     for (uint32_t cbIndex = 0; cbIndex < inoutPipeline->constCount; ++cbIndex)
     {
-        int32_t mapIndex = 0;
-        for (mapIndex = 0; mapIndex < _countof(cbBindingNames); ++mapIndex)
-        {
-            if (0 == wcscmp(cbBindingNames[mapIndex].name, inoutPipeline->constantBufferBindings[cbIndex].name))
-                break;
-        }
-        FFX_ASSERT(mapIndex < _countof(cbBindingNames));
-        if (mapIndex == _countof(cbBindingNames))
+        uint32_t resourceIdentifier = FFX_OF_BINDING_IDENTIFIER_NULL;
+        if (!findBindingIdentifier(cbBindingNames, _countof(cbBindingNames), inoutPipeline->constantBufferBindings[cbIndex], &resourceIdentifier))
             return FFX_ERROR_INVALID_ARGUMENT;
 
-        inoutPipeline->constantBufferBindings[cbIndex].resourceIdentifier = cbBindingNames[mapIndex].index;
+        inoutPipeline->constantBufferBindings[cbIndex].resourceIdentifier = resourceIdentifier;
     }
 
     return FFX_OK;
@@ -213,18 +235,18 @@ static FfxErrorCode createPipelineStates(FfxOpticalflowContext_Private* context)
             context->effectContextId,
             pipeline));
 
-        patchResourceBindings(pipeline);
+        FFX_VALIDATE(patchResourceBindings(pipeline));
         return FFX_OK;
     };
 
-    CreateComputePipeline(FFX_OPTICALFLOW_PASS_GENERATE_OPTICAL_FLOW_INPUT_PYRAMID, L"Opticalflow_InputPyramid", & context->pipelineGenerateOpticalFlowInputPyramid);
+    FFX_VALIDATE(CreateComputePipeline(FFX_OPTICALFLOW_PASS_GENERATE_OPTICAL_FLOW_INPUT_PYRAMID, L"Opticalflow_InputPyramid", & context->pipelineGenerateOpticalFlowInputPyramid));
     pipelineDescription.rootConstantBufferCount = 1;
-    CreateComputePipeline(FFX_OPTICALFLOW_PASS_PREPARE_LUMA, L"Opticalflow_Luma", &context->pipelinePrepareLuma);
-    CreateComputePipeline(FFX_OPTICALFLOW_PASS_GENERATE_SCD_HISTOGRAM, L"Opticalflow_SCD_Histogram", &context->pipelineGenerateSCDHistogram);
-    CreateComputePipeline(FFX_OPTICALFLOW_PASS_COMPUTE_SCD_DIVERGENCE, L"Opticalflow_SCD_Divergence", &context->pipelineComputeSCDDivergence);
-    CreateComputePipeline(FFX_OPTICALFLOW_PASS_COMPUTE_OPTICAL_FLOW_ADVANCED_V5, L"Opticalflow_Search", &context->pipelineComputeOpticalFlowAdvancedV5);
-    CreateComputePipeline(FFX_OPTICALFLOW_PASS_FILTER_OPTICAL_FLOW_V5, L"Opticalflow_Filter", &context->pipelineFilterOpticalFlowV5);
-    CreateComputePipeline(FFX_OPTICALFLOW_PASS_SCALE_OPTICAL_FLOW_ADVANCED_V5, L"Opticalflow_Upscale", &context->pipelineScaleOpticalFlowAdvancedV5);
+    FFX_VALIDATE(CreateComputePipeline(FFX_OPTICALFLOW_PASS_PREPARE_LUMA, L"Opticalflow_Luma", &context->pipelinePrepareLuma));
+    FFX_VALIDATE(CreateComputePipeline(FFX_OPTICALFLOW_PASS_GENERATE_SCD_HISTOGRAM, L"Opticalflow_SCD_Histogram", &context->pipelineGenerateSCDHistogram));
+    FFX_VALIDATE(CreateComputePipeline(FFX_OPTICALFLOW_PASS_COMPUTE_SCD_DIVERGENCE, L"Opticalflow_SCD_Divergence", &context->pipelineComputeSCDDivergence));
+    FFX_VALIDATE(CreateComputePipeline(FFX_OPTICALFLOW_PASS_COMPUTE_OPTICAL_FLOW_ADVANCED_V5, L"Opticalflow_Search", &context->pipelineComputeOpticalFlowAdvancedV5));
+    FFX_VALIDATE(CreateComputePipeline(FFX_OPTICALFLOW_PASS_FILTER_OPTICAL_FLOW_V5, L"Opticalflow_Filter", &context->pipelineFilterOpticalFlowV5));
+    FFX_VALIDATE(CreateComputePipeline(FFX_OPTICALFLOW_PASS_SCALE_OPTICAL_FLOW_ADVANCED_V5, L"Opticalflow_Upscale", &context->pipelineScaleOpticalFlowAdvancedV5));
 
     return FFX_OK;
 }

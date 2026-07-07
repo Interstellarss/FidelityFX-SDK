@@ -148,6 +148,7 @@ typedef struct BackendContext_VK {
 
         bool                    undefined;
         bool                    dynamic;
+        bool                    dynamicActive;
 
     } Resource;
 
@@ -1233,6 +1234,7 @@ void copyResourceState(BackendContext_VK::Resource* backendResource, const FfxRe
     backendResource->currentState = state;
     backendResource->undefined    = false;
     backendResource->dynamic      = true;
+    backendResource->dynamicActive = true;
 
     // If the internal resource state is undefined, that means we are importing a resource that
     // has not yet been initialized, so tag the resource as undefined so we can transition it accordingly.
@@ -3213,6 +3215,8 @@ FfxErrorCode UnmapResourceVK(FfxInterface* backendInterface, FfxResourceInternal
     return FFX_OK;
 }
 
+static bool dynamicResourceMatches(const BackendContext_VK::Resource& backendResource, const FfxResource* inFfxResource);
+
 FfxErrorCode RegisterResourceVK(
     FfxInterface* backendInterface,
     const FfxResource* inFfxResource,
@@ -3230,55 +3234,21 @@ FfxErrorCode RegisterResourceVK(
         return FFX_OK;
     }
 
-    // In vulkan we need to treat dynamic resources a little differently due to needing views to live as long as the GPU needs them.
-    // We will treat them more like static resources and use the nextDynamicResource as a "hint" for where it should be.
-    // Failure to find the pre-existing resource at the expected location will force a search until the resource is found.
-    // If it is not found, a new entry will be created
-    FFX_ASSERT(effectContext.nextDynamicResource > effectContext.nextStaticResource);
-    outFfxResourceInternal->internalIndex = effectContext.nextDynamicResource--;
-
-    //bool setupDynamicResource = false;
-    BackendContext_VK::Resource* backendResource = &backendContext->pResources[outFfxResourceInternal->internalIndex];
-
-    // Start by seeing if this entry is empty, as that triggers an automatic setup of a new dynamic resource
-    /*if (backendResource->uavViewIndex < 0 && backendResource->srvViewIndex < 0)
+    const uint32_t dynamicResourceIndexStart = getDynamicResourcesStartIndex(effectContextId);
+    for (uint32_t resourceIndex = dynamicResourceIndexStart; resourceIndex > effectContext.nextDynamicResource; --resourceIndex)
     {
-        setupDynamicResource = true;
+        BackendContext_VK::Resource* cachedResource = &backendContext->pResources[resourceIndex];
+        if (dynamicResourceMatches(*cachedResource, inFfxResource))
+        {
+            outFfxResourceInternal->internalIndex = resourceIndex;
+            copyResourceState(cachedResource, inFfxResource);
+            return FFX_OK;
+        }
     }
 
-    // If not a new resource, does it match what's current slotted for this dynamic resource
-    if (!setupDynamicResource)
-    {
-        // If this is us, just return as everything is setup as needed
-        if ((backendResource->resourceDescription.type == FFX_RESOURCE_TYPE_BUFFER && backendResource->bufferResource == (VkBuffer)inFfxResource->resource) ||
-            (backendResource->resourceDescription.type != FFX_RESOURCE_TYPE_BUFFER && backendResource->imageResource == (VkImage)inFfxResource->resource))
-            return FFX_OK;
-
-        // If this isn't us, search until we either find our entry or an empty resource
-        outFfxResourceInternal->internalIndex = (effectContextId * FFX_MAX_RESOURCE_COUNT) + FFX_MAX_RESOURCE_COUNT - 1;
-        while (!setupDynamicResource)
-        {
-            FFX_ASSERT(outFfxResourceInternal->internalIndex > effectContext.nextStaticResource); // Safety check while iterating
-            backendResource = &backendContext->pResources[outFfxResourceInternal->internalIndex];
-
-            // Is this us?
-            if ((backendResource->resourceDescription.type == FFX_RESOURCE_TYPE_BUFFER && backendResource->bufferResource == (VkBuffer)inFfxResource->resource) ||
-                (backendResource->resourceDescription.type != FFX_RESOURCE_TYPE_BUFFER && backendResource->imageResource == (VkImage)inFfxResource->resource))
-            {
-                 copyResourceState(backendResource, inFfxResource);
-                 return FFX_OK;
-            }
-
-            // Empty?
-            if (backendResource->uavViewIndex == -1 && backendResource->srvViewIndex == -1)
-            {
-                setupDynamicResource = true;
-                break;
-            }
-
-            --outFfxResourceInternal->internalIndex;
-        }
-    }*/
+    FFX_ASSERT(effectContext.nextDynamicResource > effectContext.nextStaticResource);
+    outFfxResourceInternal->internalIndex = effectContext.nextDynamicResource--;
+    BackendContext_VK::Resource* backendResource = &backendContext->pResources[outFfxResourceInternal->internalIndex];
 
     // If we got here, we are setting up a new dynamic entry
     backendResource->resourceDescription = inFfxResource->description;
@@ -3425,6 +3395,25 @@ FfxResource GetResourceVK(FfxInterface* backendInterface, FfxResourceInternal in
     return resource;
 }
 
+static bool dynamicResourceMatches(const BackendContext_VK::Resource& backendResource, const FfxResource* inFfxResource)
+{
+    const FfxResourceDescription& backendDescription = backendResource.resourceDescription;
+    const FfxResourceDescription& resourceDescription = inFfxResource->description;
+
+    if (!backendResource.dynamic || backendDescription.type != resourceDescription.type ||
+        backendDescription.format != resourceDescription.format || backendDescription.width != resourceDescription.width ||
+        backendDescription.height != resourceDescription.height || backendDescription.depth != resourceDescription.depth ||
+        backendDescription.mipCount != resourceDescription.mipCount || backendDescription.usage != resourceDescription.usage)
+    {
+        return false;
+    }
+
+    if (resourceDescription.type == FFX_RESOURCE_TYPE_BUFFER)
+        return backendResource.bufferResource == reinterpret_cast<VkBuffer>(inFfxResource->resource);
+
+    return backendResource.imageResource == reinterpret_cast<VkImage>(inFfxResource->resource);
+}
+
 // dispose dynamic resources: This should be called at the end of the frame
 FfxErrorCode UnregisterResourcesVK(FfxInterface* backendInterface, FfxCommandList commandList, FfxUInt32 effectContextId)
 {
@@ -3434,19 +3423,18 @@ FfxErrorCode UnregisterResourcesVK(FfxInterface* backendInterface, FfxCommandLis
 
     // Walk back all the resources that don't belong to us and reset them to their initial state
     const uint32_t dynamicResourceIndexStart = getDynamicResourcesStartIndex(effectContextId);
-    for (uint32_t resourceIndex = ++effectContext.nextDynamicResource; resourceIndex <= dynamicResourceIndexStart; ++resourceIndex)
+    for (uint32_t resourceIndex = effectContext.nextDynamicResource + 1; resourceIndex <= dynamicResourceIndexStart; ++resourceIndex)
     {
+        BackendContext_VK::Resource* backendResource = &backendContext->pResources[resourceIndex];
+        if (!backendResource->dynamic || !backendResource->dynamicActive)
+            continue;
+
         FfxResourceInternal internalResource;
         internalResource.internalIndex = resourceIndex;
 
-        BackendContext_VK::Resource* backendResource = &backendContext->pResources[resourceIndex];
-
-        // Also clear out their srv/uav indices so they are regenerated each frame
-        backendResource->uavViewIndex = -1;
-        backendResource->srvViewIndex = -1;
-
         // Add the barrier
         addBarrier(backendContext, &internalResource, backendResource->initialState);
+        backendResource->dynamicActive = false;
     }
 
     FFX_ASSERT(nullptr != commandList);
@@ -3454,13 +3442,7 @@ FfxErrorCode UnregisterResourcesVK(FfxInterface* backendInterface, FfxCommandLis
 
     flushBarriers(backendContext, pCmdList);
 
-    // Just reset the dynamic resource index, but leave the images views.
-    // They will be deleted in the first pipeline destroy call as they need to live until then
-    effectContext.nextDynamicResource = dynamicResourceIndexStart;
-
-    // destroy the views of the next frame
     effectContext.frameIndex = (effectContext.frameIndex + 1) % FFX_MAX_QUEUED_FRAMES;
-    destroyDynamicViews(backendContext, effectContextId, effectContext.frameIndex);
 
     return FFX_OK;
 }
