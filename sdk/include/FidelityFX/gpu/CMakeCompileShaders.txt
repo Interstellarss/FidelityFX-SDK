@@ -68,8 +68,10 @@ function(compile_shaders_with_depfile
 
 	set(SHELL_SAFE_PERMUTATION_ARGS )
 	foreach(PERMUTATION_ARG ${PERMUTATION_ARGS})
-		string(REPLACE "{" "\\{" PERMUTATION_ARG "${PERMUTATION_ARG}")
-		string(REPLACE "}" "\\}" PERMUTATION_ARG "${PERMUTATION_ARG}")
+		if (NOT WIN32)
+			string(REPLACE "{" "\\{" PERMUTATION_ARG "${PERMUTATION_ARG}")
+			string(REPLACE "}" "\\}" PERMUTATION_ARG "${PERMUTATION_ARG}")
+		endif()
 		list(APPEND SHELL_SAFE_PERMUTATION_ARGS "${PERMUTATION_ARG}")
 	endforeach(PERMUTATION_ARG)
 
