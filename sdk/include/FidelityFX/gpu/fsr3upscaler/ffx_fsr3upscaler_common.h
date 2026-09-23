@@ -46,6 +46,18 @@ FfxFloat32 ReconstructedDepthMvPxThreshold(FfxFloat32 fNearestDepthInMeters)
 // Accumulation
 FFX_STATIC const FfxFloat32 fUpsampleLanczosWeightScale     = 1.0f / 16.0f;
 FFX_STATIC const FfxFloat32 fAverageLanczosWeightPerFrame   = 0.74f * fUpsampleLanczosWeightScale; // Average lanczos weight for jitter accumulated samples
+
+FfxFloat32 MovingHistoryWeight()
+{
+    // A seven-sample history at Quality exposes the current jitter phase on
+    // silhouettes and texture detail. Retain up to two nominal jitter spans.
+    // Native AA uses one span: repeated resampling is more lossy when fine
+    // input details occupy fewer output pixels.
+    const FfxFloat32 historyCycles = clamp(2.0f / ffxMax(DownscaleFactor().x, DownscaleFactor().y) - 1.0f, 1.0f, 2.0f);
+    return ffxMax(0.15f, historyCycles * JitterSequenceLength() * fAverageLanczosWeightPerFrame *
+        DownscaleFactor().x * DownscaleFactor().y);
+}
+
 FFX_STATIC const FfxFloat32 fAccumulationMaxOnMotion        = 3.0f * fUpsampleLanczosWeightScale;
 
 #define SHADING_CHANGE_SET_SIZE 5

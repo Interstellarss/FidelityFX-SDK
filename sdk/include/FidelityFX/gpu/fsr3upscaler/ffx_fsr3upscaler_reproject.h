@@ -24,23 +24,54 @@
 #define FFX_FSR3UPSCALER_OPTION_REPROJECT_USE_LANCZOS_TYPE 0 // Reference
 #endif
 
-FfxFloat32x4 WrapHistory(FfxInt32x2 iPxSample)
+// Quintic Lagrange preserves fractional translation without the repeated
+// high-frequency attenuation of the cubic history filter. Keep FP32 weights.
+void HistoryWeights(FfxFloat32 t, FFX_PARAMETER_OUT FfxFloat32 w[6])
 {
-    return LoadHistory(iPxSample);
+    w[0] = -(t + 1.0f) * t * (t - 1.0f) * (t - 2.0f) * (t - 3.0f) / 120.0f;
+    w[1] = (t + 2.0f) * t * (t - 1.0f) * (t - 2.0f) * (t - 3.0f) / 24.0f;
+    w[2] = -(t + 2.0f) * (t + 1.0f) * (t - 1.0f) * (t - 2.0f) * (t - 3.0f) / 12.0f;
+    w[3] = (t + 2.0f) * (t + 1.0f) * t * (t - 2.0f) * (t - 3.0f) / 12.0f;
+    w[4] = -(t + 2.0f) * (t + 1.0f) * t * (t - 1.0f) * (t - 3.0f) / 24.0f;
+    w[5] = (t + 2.0f) * (t + 1.0f) * t * (t - 1.0f) * (t - 2.0f) / 120.0f;
 }
 
-DeclareCustomFetchBicubicSamples(FetchHistorySamples, WrapHistory)
-DeclareCustomTextureSample(HistorySample, FFX_FSR3UPSCALER_GET_LANCZOS_SAMPLER1D(FFX_FSR3UPSCALER_OPTION_REPROJECT_USE_LANCZOS_TYPE), FetchHistorySamples)
-
-#if FFX_HALF
-FFX_MIN16_F4 WrapHistory16(FfxInt32x2 iPxSample)
+FfxFloat32x4 FilterHistoryRow(FfxFloat32x4 samples[6], FfxFloat32 weights[6])
 {
-    return FFX_MIN16_F4(LoadHistory(iPxSample));
+    FfxFloat32x4 value = FfxFloat32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    FFX_UNROLL
+    for (FfxInt32 i = 0; i < 6; ++i) value += samples[i] * weights[i];
+    const FfxFloat32x4 lo = ffxMin(samples[2], samples[3]);
+    const FfxFloat32x4 hi = ffxMax(samples[2], samples[3]);
+    // A smooth extremum can lie between the two central samples. A strict
+    // central min/max clamp shaves it off at every subpixel reprojection.
+    // Bound the extension by the neighboring curvature. Monotone steps and
+    // flat regions retain the original hard bound (no extra ringing).
+    const FfxFloat32x4 zero = FfxFloat32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    const FfxFloat32x4 lower = ffxMax(zero, ffxMin(samples[1] - hi, samples[4] - hi)) * 0.125f;
+    const FfxFloat32x4 upper = ffxMax(zero, ffxMin(lo - samples[1], lo - samples[4])) * 0.125f;
+    return clamp(value, lo - lower, hi + upper);
 }
 
-DeclareCustomFetchBicubicSamplesMin16(FetchHistorySamples16, WrapHistory16)
-DeclareCustomTextureSampleMin16(HistorySample16, FFX_FSR3UPSCALER_GET_LANCZOS_SAMPLER1D(FFX_FSR3UPSCALER_OPTION_REPROJECT_USE_LANCZOS_TYPE), FetchHistorySamples16)
-#endif
+FfxFloat32x4 HistorySample(FfxFloat32x2 uv, FfxInt32x2 size)
+{
+    const FfxFloat32x2 pos = uv * FfxFloat32x2(size) - FfxFloat32x2(0.5f, 0.5f);
+    const FfxInt32x2 base = FfxInt32x2(floor(pos));
+    const FfxFloat32x2 t = ffxFract(pos);
+    FfxFloat32 wx[6], wy[6];
+    HistoryWeights(t.x, wx);
+    HistoryWeights(t.y, wy);
+    FfxFloat32x4 rows[6];
+    FFX_UNROLL
+    for (FfxInt32 y = 0; y < 6; ++y) {
+        FfxFloat32x4 samples[6];
+        FFX_UNROLL
+        for (FfxInt32 x = 0; x < 6; ++x)
+            samples[x] = LoadHistory(ClampCoord(base, FfxInt32x2(x - 2, y - 2), size));
+        rows[y] = FilterHistoryRow(samples, wx);
+    }
+    return FilterHistoryRow(rows, wy);
+}
 
 FfxFloat32x2 GetMotionVector(FfxInt32x2 iPxHrPos, FfxFloat32x2 fHrUv)
 {
@@ -68,11 +99,7 @@ void ReprojectHistoryColor(const AccumulationPassCommonParams params, FFX_PARAME
         UpscaleSize().x == PreviousFrameUpscaleSize().x && UpscaleSize().y == PreviousFrameUpscaleSize().y) {
         fReprojectedHistory = LoadHistory(params.iPxHrPos);
     } else {
-#if FFX_HALF && FFX_FSR3UPSCALER_OPTION_REPROJECT_SAMPLERS_USE_DATA_HALF
-        fReprojectedHistory = FfxFloat32x4(HistorySample16(params.fReprojectedHrUv, PreviousFrameUpscaleSize()));
-#else
         fReprojectedHistory = HistorySample(params.fReprojectedHrUv, PreviousFrameUpscaleSize());
-#endif
     }
 
     data.fHistoryColor = fReprojectedHistory.rgb;

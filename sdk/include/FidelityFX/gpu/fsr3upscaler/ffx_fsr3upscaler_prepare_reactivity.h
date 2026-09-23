@@ -215,7 +215,7 @@ FfxFloat32 UpdateAccumulation(FfxInt32x2 iPxPos, FfxFloat32x2 fUv, FfxFloat32x2 
     const FfxFloat32 fShadingHistoryLimit = 3.0f * (1.0f - fHistoryChange) / ffxMax(fHistoryChange, 1.0f / 255.0f);
     fAccumulation = ffxMin(fAccumulation, fShadingHistoryLimit);
     fAccumulation = ffxLerp(fAccumulation, -1.0f, fDisocclusion);
-    const FfxFloat32 fMovingHistoryLimit = 0.15f / (fAverageLanczosWeightPerFrame * DownscaleFactor().x * DownscaleFactor().y);
+    const FfxFloat32 fMovingHistoryLimit = MovingHistoryWeight() / (fAverageLanczosWeightPerFrame * DownscaleFactor().x * DownscaleFactor().y);
     const FfxFloat32 fVelocityFactor = ffxSaturate(ffxMax(0.0f, Get4KVelocity(fMotionVector) * VelocityFactor() / 0.5f));
     const FfxFloat32 fRetainedFrames = ffxMin(fAccumulation, ffxLerp(fAccumulation, fMovingHistoryLimit, fVelocityFactor));
     const FfxFloat32 fAccumulatedFramesToStore = ffxSaturate((fRetainedFrames + 1.0f) / 255.0f);

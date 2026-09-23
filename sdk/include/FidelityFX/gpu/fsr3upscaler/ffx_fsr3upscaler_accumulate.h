@@ -104,7 +104,7 @@ void ComputeBaseAccumulationWeight(const AccumulationPassCommonParams params, FF
 {
     FfxFloat32 fBaseAccumulation = data.fHistoryWeight;
 
-    fBaseAccumulation = ffxMin(fBaseAccumulation, ffxLerp(fBaseAccumulation, 0.15f, ffxSaturate(ffxMax(0.0f, (params.f4KVelocity * VelocityFactor()) / 0.5f))));
+    fBaseAccumulation = ffxMin(fBaseAccumulation, ffxLerp(fBaseAccumulation, MovingHistoryWeight(), ffxSaturate(ffxMax(0.0f, (params.f4KVelocity * VelocityFactor()) / 0.5f))));
 
     data.fHistoryWeight = fBaseAccumulation;
 }

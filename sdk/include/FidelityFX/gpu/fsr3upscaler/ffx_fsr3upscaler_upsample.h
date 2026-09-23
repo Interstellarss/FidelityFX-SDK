@@ -303,7 +303,8 @@ void ComputeUpsampledColorAndWeight(const AccumulationPassCommonParams params, F
     // We compute a sliced lanczos filter with 2 lobes (other slices are accumulated temporaly)
     const FfxFloat32x2 fDstOutputPos        = FfxFloat32x2(params.iPxHrPos) + FFX_BROADCAST_FLOAT32X2(0.5f);
     const FfxFloat32x2 fSrcOutputPos        = fDstOutputPos * DownscaleFactor();
-    const FfxInt32x2   iSrcInputPos         = FfxInt32x2(floor(fSrcOutputPos));
+    // Center the reconstruction window on the actual jittered input sample grid.
+    const FfxInt32x2   iSrcInputPos         = FfxInt32x2(floor(fSrcOutputPos + Jitter()));
     const FfxFloat32x2 fSrcUnjitteredPos    = (FfxFloat32x2(iSrcInputPos) + FfxFloat32x2(0.5f, 0.5f)) - Jitter(); // This is the un-jittered position of the sample at offset 0,0
     const FfxFloat32x2 fBaseSampleOffset    = FfxFloat32x2(fSrcUnjitteredPos - fSrcOutputPos);
 
