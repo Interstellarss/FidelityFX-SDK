@@ -357,6 +357,18 @@ FfxFloat32x3 LoadInputColor(FfxInt32x2 iPxPos)
 	return texelFetch(r_input_color_jittered, iPxPos, 0).rgb;
 }
 
+FfxFloat32 LoadNrdHistoryConfidence(FfxInt32x2 iPxPos)
+{
+    const FfxFloat32 fMetadata = texelFetch(r_input_color_jittered, iPxPos, 0).a;
+    return fMetadata <= -1.0f ? ffxSaturate(-fMetadata - 1.0f) : -1.0f;
+}
+
+FfxFloat32 SampleNrdHistoryConfidence(FfxFloat32x2 fUV)
+{
+    const FfxFloat32 fMetadata = textureLod(sampler2D(r_input_color_jittered, s_PointClamp), fUV, 0.0).a;
+    return fMetadata <= -1.0f ? ffxSaturate(-fMetadata - 1.0f) : -1.0f;
+}
+
 FfxFloat32x3 SampleInputColor(FfxFloat32x2 fUV)
 {
 	return textureLod(sampler2D(r_input_color_jittered, s_LinearClamp), fUV, 0.0).rgb;

@@ -86,7 +86,7 @@ void LumaInstability(FfxInt32x2 iPxPos)
         const FfxFloat32 fReactiveMask = ffxSaturate(fDilatedReactiveMasks[REACTIVE]);
         const FfxFloat32 fDisocclusion = ffxSaturate(fDilatedReactiveMasks[DISOCCLUSION]);
         const FfxFloat32 fShadingChange = ffxSaturate(fDilatedReactiveMasks[SHADING_CHANGE]);
-        const FfxFloat32 fAccumulation = ffxSaturate(fDilatedReactiveMasks[ACCUMULAION]);
+        const FfxFloat32 fAccumulation = ffxSaturate(fDilatedReactiveMasks[ACCUMULAION] * 255.0f * AccumulationAddedPerFrame());
 
         const FfxBoolean bAccumulationFactor = fAccumulation > 0.9f;
 

@@ -210,29 +210,17 @@ FfxFloat32 UpdateAccumulation(FfxInt32x2 iPxPos, FfxFloat32x2 fUv, FfxFloat32x2 
         const FfxFloat32x2 fReprojectedUv_HW = ClampUv(fReprojectedUv, PreviousFrameRenderSize(), MaxRenderSize());
         fAccumulation                        = ffxSaturate(SampleAccumulation(fReprojectedUv_HW));
     }
-    const FfxFloat32 fAccumulationAddedPerFrame= AccumulationAddedPerFrame(); //default is 0.333
-
-    // Assume at frame N+0 fShadingChange is 1.0, and all subsequent frames fShadingChange is 0.0 and fDisocclusion is 0.0. Then,
-    // frame N+0 fAccumulation will be 0.000
-    // frame N+2 fAccumulation will be 0.000 + 0.333 * 1 == 0.333
-    // frame N+3 fAccumulation will be 0.000 + 0.333 * 2 == 0.666
-    // frame N+4 fAccumulation will be 0.000 + 0.333 * 3 == 0.999
-    fAccumulation = ffxLerp(fAccumulation, 0.0f, fShadingChange);
-
-    const FfxFloat32 fMinDisocclusionAccumulation = MinDisocclusionAccumulation(); //default is -0.333
-    // Assume at frame N+0 fDisocclusion is 1.0, and all subsequent frames fShadingChange is 0.0 and fDisocclusion is 0.0. Then,
-    // frame N+0 fAccumulation will be -0.333f (but normalized to store in unorm)
-    // frame N+1 fAccumulation will be -0.333f + 0.333 * 1 == 0.000
-    // frame N+2 fAccumulation will be -0.333f + 0.333 * 2 == 0.333
-    // frame N+3 fAccumulation will be -0.333f + 0.333 * 3 == 0.666
-    // frame N+4 fAccumulation will be -0.333f + 0.333 * 4 == 0.999
-    fAccumulation = ffxLerp(fAccumulation, ffxMin(fMinDisocclusionAccumulation, fAccumulation), fDisocclusion);
-    
-    fAccumulation *= FfxFloat32(round(fAccumulation * 100.0f) > 1.0f);
-
-    // Update for next frame, normalize to store in unorm
-    const FfxFloat32 fAccumulatedFramesToStore = ffxSaturate(fAccumulation + fAccumulationAddedPerFrame);
+    fAccumulation *= 255.0f;
+    const FfxFloat32 fHistoryChange = ffxMax(fShadingChange, fDisocclusion);
+    const FfxFloat32 fShadingHistoryLimit = 3.0f * (1.0f - fHistoryChange) / ffxMax(fHistoryChange, 1.0f / 255.0f);
+    fAccumulation = ffxMin(fAccumulation, fShadingHistoryLimit);
+    fAccumulation = ffxLerp(fAccumulation, -1.0f, fDisocclusion);
+    const FfxFloat32 fMovingHistoryLimit = 0.15f / (fAverageLanczosWeightPerFrame * DownscaleFactor().x * DownscaleFactor().y);
+    const FfxFloat32 fVelocityFactor = ffxSaturate(ffxMax(0.0f, Get4KVelocity(fMotionVector) * VelocityFactor() / 0.5f));
+    const FfxFloat32 fRetainedFrames = ffxMin(fAccumulation, ffxLerp(fAccumulation, fMovingHistoryLimit, fVelocityFactor));
+    const FfxFloat32 fAccumulatedFramesToStore = ffxSaturate((fRetainedFrames + 1.0f) / 255.0f);
     StoreAccumulation(iPxPos, fAccumulatedFramesToStore);
+    fAccumulation = ffxSaturate(fAccumulation / 255.0f);
 
     return fAccumulation;
 }
@@ -259,7 +247,9 @@ void PrepareReactivity(FfxInt32x2 iPxPos)
     const FfxFloat32 fDepthInMeters = GetViewSpaceDepthInMeters(fDilatedDepth);
 
     const FfxFloat32 fDisocclusion = ComputeDisocclusions(fUv, fMotionVector, GetViewSpaceDepth(fDilatedDepth));
-    const FfxFloat32 fShadingChange = ffxMax(DilateReactiveMasks(iPxPos, fUv), ComputeShadingChange(fUv));
+    const FfxFloat32 fNrdConfidence = LoadNrdHistoryConfidence(ffxMin(iPxPos, FfxInt32x2(RenderSize()) - FfxInt32x2(1, 1)));
+    const FfxFloat32 fShadingChange = ffxMax(DilateReactiveMasks(iPxPos, fUv),
+        fNrdConfidence >= 0.0f ? 1.0f - fNrdConfidence : ComputeShadingChange(fUv));
 
     const FfxFloat32 fMotionDivergence = ComputeMotionDivergence(fUv, fMotionVector, fDilatedDepth);
     const FfxFloat32 fDilatedTransparencyAndComposition = DilateTransparencyAndCompositionMasks(iPxPos, fUv);

@@ -90,6 +90,14 @@ FfxFloat32 ComputeMinimumDifference(FfxInt32x2 iPxPos, SampleSet fSet0, SampleSe
     SortSet(fSet0);
     SortSet(fSet1);
 
+    const FfxFloat32 fLowDifference = fSet0.fSamples[0] - fSet1.fSamples[0];
+    const FfxFloat32 fHighDifference = fSet0.fSamples[SHADING_CHANGE_SET_SIZE - 1] - fSet1.fSamples[SHADING_CHANGE_SET_SIZE - 1];
+    if (fLowDifference * fHighDifference > 0.0f) {
+        const FfxFloat32 fLowChange = 1.0f - MinDividedByMax(fSet0.fSamples[0], fSet1.fSamples[0]);
+        const FfxFloat32 fHighChange = 1.0f - MinDividedByMax(fSet0.fSamples[SHADING_CHANGE_SET_SIZE - 1], fSet1.fSamples[SHADING_CHANGE_SET_SIZE - 1]);
+        return sign(fLowDifference) * ffxMin(fLowChange, fHighChange);
+    }
+
     const FfxFloat32 fMax = ffxMin(fSet0.fSamples[SHADING_CHANGE_SET_SIZE-1], fSet1.fSamples[SHADING_CHANGE_SET_SIZE-1]);
 
     if (fMax > FSR3UPSCALER_FP32_MIN) {

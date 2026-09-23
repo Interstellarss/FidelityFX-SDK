@@ -115,6 +115,7 @@ struct AccumulationPassCommonParams
     FfxFloat32      fShadingChange;
     FfxFloat32      fAccumulation;
     FfxFloat32      fLumaInstabilityFactor;
+    FfxFloat32      fNrdHistoryConfidence;
     FfxFloat32      fFarthestDepthInMeters;
 
     FfxBoolean      bIsExistingSample;

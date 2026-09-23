@@ -430,6 +430,18 @@ FfxFloat32x3 LoadInputColor(FfxUInt32x2 iPxPos)
     return r_input_color_jittered[iPxPos].rgb;
 }
 
+FfxFloat32 LoadNrdHistoryConfidence(FfxInt32x2 iPxPos)
+{
+    const FfxFloat32 fMetadata = r_input_color_jittered[iPxPos].a;
+    return fMetadata <= -1.0f ? ffxSaturate(-fMetadata - 1.0f) : -1.0f;
+}
+
+FfxFloat32 SampleNrdHistoryConfidence(FfxFloat32x2 fUV)
+{
+    const FfxFloat32 fMetadata = r_input_color_jittered.SampleLevel(s_PointClamp, fUV, 0).a;
+    return fMetadata <= -1.0f ? ffxSaturate(-fMetadata - 1.0f) : -1.0f;
+}
+
 FfxFloat32x3 SampleInputColor(FfxFloat32x2 fUV)
 {
     return r_input_color_jittered.SampleLevel(s_LinearClamp, fUV, 0).rgb;

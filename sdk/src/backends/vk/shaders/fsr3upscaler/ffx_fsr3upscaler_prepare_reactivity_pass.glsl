@@ -41,6 +41,8 @@
 
 #define FSR3UPSCALER_BIND_CB_FSR3UPSCALER                                   12
 
+#define FSR3UPSCALER_BIND_SRV_INPUT_COLOR 13
+
 #include "fsr3upscaler/ffx_fsr3upscaler_callbacks_glsl.h"
 #include "fsr3upscaler/ffx_fsr3upscaler_common.h"
 #include "fsr3upscaler/ffx_fsr3upscaler_prepare_reactivity.h"

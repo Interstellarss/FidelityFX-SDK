@@ -388,7 +388,7 @@ void ComputeUpsampledColorAndWeight(const AccumulationPassCommonParams params, F
     );
 
     #if FFX_FSR3UPSCALER_OPTION_HDR_COLOR_INPUT
-    if (bIsInitialSample)
+    if (bIsInitialSample && params.fNrdHistoryConfidence < 0.0f)
     {
         TonemapPaired(TopCornerR, TopCornerG, TopCornerB);
         TonemapPaired(BotCornerR, BotCornerG, BotCornerB);
@@ -423,7 +423,7 @@ void ComputeUpsampledColorAndWeight(const AccumulationPassCommonParams params, F
     }
 
 #if FFX_FSR3UPSCALER_OPTION_HDR_COLOR_INPUT
-    if (bIsInitialSample)
+    if (bIsInitialSample && params.fNrdHistoryConfidence < 0.0f)
     {
         for (iSampleIndex = 0; iSampleIndex < 9; ++iSampleIndex)
         {
@@ -634,7 +634,8 @@ void ComputeUpsampledColorAndWeight(const AccumulationPassCommonParams params, F
     // Initial samples using tonemapped upsampling
     if (bIsInitialSample) {
 #if FFX_FSR3UPSCALER_OPTION_HDR_COLOR_INPUT
-        data.fUpsampledColor  = RGBToYCoCg(InverseTonemap(YCoCgToRGB(data.clippingBox.boxCenter)));
+        data.fUpsampledColor = params.fNrdHistoryConfidence < 0.0f ?
+            RGBToYCoCg(InverseTonemap(YCoCgToRGB(data.clippingBox.boxCenter))) : data.clippingBox.boxCenter;
 #else
         data.fUpsampledColor  = data.clippingBox.boxCenter;
 #endif

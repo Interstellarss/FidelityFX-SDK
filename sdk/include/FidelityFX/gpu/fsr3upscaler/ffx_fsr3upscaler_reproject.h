@@ -63,11 +63,17 @@ void ComputeReprojectedUVs(FFX_PARAMETER_INOUT AccumulationPassCommonParams para
 void ReprojectHistoryColor(const AccumulationPassCommonParams params, FFX_PARAMETER_INOUT AccumulationPassData data)
 
 {
+    FfxFloat32x4 fReprojectedHistory;
+    if (params.fMotionVector.x == 0.0f && params.fMotionVector.y == 0.0f &&
+        UpscaleSize().x == PreviousFrameUpscaleSize().x && UpscaleSize().y == PreviousFrameUpscaleSize().y) {
+        fReprojectedHistory = LoadHistory(params.iPxHrPos);
+    } else {
 #if FFX_HALF && FFX_FSR3UPSCALER_OPTION_REPROJECT_SAMPLERS_USE_DATA_HALF
-    const FfxFloat32x4 fReprojectedHistory = FfxFloat32x4(HistorySample16(params.fReprojectedHrUv, UpscaleSize()));
+        fReprojectedHistory = FfxFloat32x4(HistorySample16(params.fReprojectedHrUv, PreviousFrameUpscaleSize()));
 #else
-    const FfxFloat32x4 fReprojectedHistory = HistorySample(params.fReprojectedHrUv, PreviousFrameUpscaleSize());
+        fReprojectedHistory = HistorySample(params.fReprojectedHrUv, PreviousFrameUpscaleSize());
 #endif
+    }
 
     data.fHistoryColor = fReprojectedHistory.rgb;
     data.fHistoryColor *= DeltaPreExposure();
