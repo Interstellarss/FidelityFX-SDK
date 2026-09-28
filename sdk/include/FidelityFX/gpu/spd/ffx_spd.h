@@ -354,6 +354,7 @@ void SpdDownsampleMip_2(FfxUInt32 x, FfxUInt32 y, FfxUInt32x2 workGroupID, FfxUI
 #else
     FfxFloat32x4 v = SpdLoadIntermediate(x, y);
     v        = SpdReduceQuad(v);
+    ffxSpdWorkgroupShuffleBarrier();
     // quad index 0 stores result
     if (localInvocationIndex % 4 == 0)
     {
@@ -389,16 +390,17 @@ void SpdDownsampleMip_3(FfxUInt32 x, FfxUInt32 y, FfxUInt32x2 workGroupID, FfxUI
         SpdStoreIntermediate(x * 4 + y, y * 4, v);
     }
 #else
+    FfxFloat32x4 v = FfxFloat32x4(0.0, 0.0, 0.0, 0.0);
     if (localInvocationIndex < 64)
     {
-        FfxFloat32x4 v = SpdLoadIntermediate(x * 2 + y % 2, y * 2);
-        v        = SpdReduceQuad(v);
-        // quad index 0 stores result
-        if (localInvocationIndex % 4 == 0)
-        {
-            SpdStore(FfxInt32x2(workGroupID.xy * 4) + FfxInt32x2(x / 2, y / 2), v, mip, slice);
-            SpdStoreIntermediate(x * 2 + y / 2, y * 2, v);
-        }
+        v = SpdLoadIntermediate(x * 2 + y % 2, y * 2);
+        v = SpdReduceQuad(v);
+    }
+    ffxSpdWorkgroupShuffleBarrier();
+    if (localInvocationIndex < 64 && localInvocationIndex % 4 == 0)
+    {
+        SpdStore(FfxInt32x2(workGroupID.xy * 4) + FfxInt32x2(x / 2, y / 2), v, mip, slice);
+        SpdStoreIntermediate(x * 2 + y / 2, y * 2, v);
     }
 #endif
 }
@@ -422,16 +424,17 @@ void SpdDownsampleMip_4(FfxUInt32 x, FfxUInt32 y, FfxUInt32x2 workGroupID, FfxUI
         SpdStoreIntermediate(x + y * 2, 0, v);
     }
 #else
+    FfxFloat32x4 v = FfxFloat32x4(0.0, 0.0, 0.0, 0.0);
     if (localInvocationIndex < 16)
     {
-        FfxFloat32x4 v = SpdLoadIntermediate(x * 4 + y, y * 4);
-        v        = SpdReduceQuad(v);
-        // quad index 0 stores result
-        if (localInvocationIndex % 4 == 0)
-        {
-            SpdStore(FfxInt32x2(workGroupID.xy * 2) + FfxInt32x2(x / 2, y / 2), v, mip, slice);
-            SpdStoreIntermediate(x / 2 + y, 0, v);
-        }
+        v = SpdLoadIntermediate(x * 4 + y, y * 4);
+        v = SpdReduceQuad(v);
+    }
+    ffxSpdWorkgroupShuffleBarrier();
+    if (localInvocationIndex < 16 && localInvocationIndex % 4 == 0)
+    {
+        SpdStore(FfxInt32x2(workGroupID.xy * 2) + FfxInt32x2(x / 2, y / 2), v, mip, slice);
+        SpdStoreIntermediate(x / 2 + y, 0, v);
     }
 #endif
 }
@@ -791,6 +794,7 @@ void SpdDownsampleMip_2H(FfxUInt32 x, FfxUInt32 y, FfxUInt32x2 workGroupID, FfxU
 #else
     FfxFloat16x4 v = SpdLoadIntermediateH(x, y);
     v     = SpdReduceQuadH(v);
+    ffxSpdWorkgroupShuffleBarrier();
     // quad index 0 stores result
     if (localInvocationIndex % 4 == 0)
     {
@@ -826,16 +830,17 @@ void SpdDownsampleMip_3H(FfxUInt32 x, FfxUInt32 y, FfxUInt32x2 workGroupID, FfxU
         SpdStoreIntermediateH(x * 4 + y, y * 4, v);
     }
 #else
+    FfxFloat16x4 v = FfxFloat16x4(0.0, 0.0, 0.0, 0.0);
     if (localInvocationIndex < 64)
     {
-        FfxFloat16x4 v = SpdLoadIntermediateH(x * 2 + y % 2, y * 2);
-        v     = SpdReduceQuadH(v);
-        // quad index 0 stores result
-        if (localInvocationIndex % 4 == 0)
-        {
-            SpdStoreH(FfxInt32x2(workGroupID.xy * 4) + FfxInt32x2(x / 2, y / 2), v, mip, slice);
-            SpdStoreIntermediateH(x * 2 + y / 2, y * 2, v);
-        }
+        v = SpdLoadIntermediateH(x * 2 + y % 2, y * 2);
+        v = SpdReduceQuadH(v);
+    }
+    ffxSpdWorkgroupShuffleBarrier();
+    if (localInvocationIndex < 64 && localInvocationIndex % 4 == 0)
+    {
+        SpdStoreH(FfxInt32x2(workGroupID.xy * 4) + FfxInt32x2(x / 2, y / 2), v, mip, slice);
+        SpdStoreIntermediateH(x * 2 + y / 2, y * 2, v);
     }
 #endif
 }
@@ -859,16 +864,17 @@ void SpdDownsampleMip_4H(FfxUInt32 x, FfxUInt32 y, FfxUInt32x2 workGroupID, FfxU
         SpdStoreIntermediateH(x + y * 2, 0, v);
     }
 #else
+    FfxFloat16x4 v = FfxFloat16x4(0.0, 0.0, 0.0, 0.0);
     if (localInvocationIndex < 16)
     {
-        FfxFloat16x4 v = SpdLoadIntermediateH(x * 4 + y, y * 4);
-        v     = SpdReduceQuadH(v);
-        // quad index 0 stores result
-        if (localInvocationIndex % 4 == 0)
-        {
-            SpdStoreH(FfxInt32x2(workGroupID.xy * 2) + FfxInt32x2(x / 2, y / 2), v, mip, slice);
-            SpdStoreIntermediateH(x / 2 + y, 0, v);
-        }
+        v = SpdLoadIntermediateH(x * 4 + y, y * 4);
+        v = SpdReduceQuadH(v);
+    }
+    ffxSpdWorkgroupShuffleBarrier();
+    if (localInvocationIndex < 16 && localInvocationIndex % 4 == 0)
+    {
+        SpdStoreH(FfxInt32x2(workGroupID.xy * 2) + FfxInt32x2(x / 2, y / 2), v, mip, slice);
+        SpdStoreIntermediateH(x / 2 + y, 0, v);
     }
 #endif
 }
